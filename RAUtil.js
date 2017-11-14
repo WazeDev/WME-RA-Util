@@ -20,7 +20,6 @@
 Todo:
 -diameter change
 
-
 non-normal RA color:#FF8000
 normal RA color:#4cc600
 */
