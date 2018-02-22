@@ -217,7 +217,7 @@ var _settings;
             saveSettingsToStorage();
         });
 
-        window.Waze.selectionManager.events.register("selectionchanged", null, checkDisplayTool);
+        W.selectionManager.events.register("selectionchanged", null, checkDisplayTool);
         //W.model.actionManager.events.register("afterundoaction",null, undotriggered);
         //W.model.actionManager.events.register("afterclearactions",null,actionsCleared);
 
@@ -267,7 +267,7 @@ var _settings;
     */
 
     function checkDisplayTool(){
-        if(W.selectionManager.hasSelectedItems() && Waze.selectionManager.selectedItems[0].model.type === 'segment'){
+        if(W.selectionManager.hasSelectedItems() && W.selectionManager.selectedItems[0].model.type === 'segment'){
             if(!AllSelectedSegmentsRA() || W.selectionManager.selectedItems.length === 0)
                 $('#RAUtilWindow').css({'visibility': 'hidden'});
             else{
