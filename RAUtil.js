@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         WME RA Util
 // @namespace    https://greasyfork.org/users/30701-justins83-waze
-// @version      2018.02.22.01
+// @version      2018.02.27.01
 // @description  Providing basic utility for RA adjustment without the need to delete & recreate
 // @include      https://www.waze.com/editor*
 // @include      https://www.waze.com/*/editor*
@@ -25,12 +25,13 @@ normal RA color:#4cc600
 */
 (function() {
 
-var RAUtilWindow = null;
-var UpdateSegmentGeometry;
-var MoveNode, MultiAction;
+    var RAUtilWindow = null;
+    var UpdateSegmentGeometry;
+    var MoveNode, MultiAction;
+    var drc_layer;
 
-//var totalActions = 0;
-var _settings;
+    //var totalActions = 0;
+    var _settings;
 
     function bootstrap(tries) {
         tries = tries || 1;
@@ -39,7 +40,7 @@ var _settings;
             window.W.map &&
             window.W.model &&
             window.require &&
-           WazeWrap) {
+            WazeWrap) {
 
             init();
 
@@ -175,7 +176,7 @@ var _settings;
         alertsHTML += '</tr></table>';
 
         alertsHTML += '</div></div>';*/
-        alertsHTML += '</div></div>'; //Close divWrapers & outer div
+        alertsHTML += '</div><input type="checkbox" id="chkRARoundaboutAngles">Enable Roundabout Angles</div>'; //Close divWrapers & outer div
 
 
 
@@ -223,20 +224,45 @@ var _settings;
 
         var loadedSettings = $.parseJSON(localStorage.getItem("WME_RAUtil"));
         var defaultSettings = {
-                divTop: "15%",
-                divLeft: "25%",
-                Expanded: true
+            divTop: "15%",
+            divLeft: "25%",
+            Expanded: true,
+            RoundaboutAngles: true
         };
         _settings = loadedSettings ? loadedSettings : defaultSettings;
 
         $('#RAUtilWindow').css('left', _settings.divLeft);
         $('#RAUtilWindow').css('top', _settings.divTop);
+        $("#chkRARoundaboutAngles").prop('checked', _settings.RoundaboutAngles);
+        $("#chkRARoundaboutAngles").prop('checked', _settings.RoundaboutAngles);
 
         if(!_settings.Expanded){
             $("#divWrappers").removeClass("in");
             $("#divWrappers").addClass("collapse");
             $("#collapser").removeClass("fa-caret-square-o-up");
             $("#collapser").addClass("fa-caret-square-o-down");
+        }
+
+        $("#chkRARoundaboutAngles").click(function(){
+            saveSettingsToStorage();
+
+            if($("#chkRARoundaboutAngles").is(":checked")){
+                W.map.events.register("zoomend", null, DrawRoundaboutAngles);
+                W.map.events.register("moveend", null, DrawRoundaboutAngles);
+                DrawRoundaboutAngles();
+                drc_layer.setVisibility(true);
+            }
+            else{
+                W.map.events.unregister("zoomend", null, DrawRoundaboutAngles);
+                W.map.events.unregister("moveend", null, DrawRoundaboutAngles);
+                drc_layer.setVisibility(false);
+            }
+        });
+
+        if(_settings.RoundaboutAngles){
+            W.map.events.register("zoomend", null, DrawRoundaboutAngles);
+            W.map.events.register("moveend", null, DrawRoundaboutAngles);
+            DrawRoundaboutAngles();
         }
     }
 
@@ -245,12 +271,14 @@ var _settings;
             var settings = {
                 divTop: "15%",
                 divLeft: "25%",
-                Expanded: true
+                Expanded: true,
+                RoundaboutAngles: true
             };
 
             settings.divLeft = $('#RAUtilWindow').css('left');
             settings.divTop = $('#RAUtilWindow').css('top');
             settings.Expanded = $("#collapser").attr('class').indexOf("fa-caret-square-o-up") > -1;
+            settings.RoundaboutAngles = $("#chkRARoundaboutAngles").is(":checked");
             localStorage.setItem("WME_RAUtil", JSON.stringify(settings));
         }
     }
@@ -531,13 +559,13 @@ var _settings;
                 newNodeGeometry.y = gps[0].y;
 
                 newNodeGeometry.calculateBounds();
-				
-				var connectedSegObjs = {};
+
+                var connectedSegObjs = {};
                 var emptyObj = {};
                 for(var j=0;j<node.attributes.segIDs.length;j++){
                     var segid = node.attributes.segIDs[j];
                     connectedSegObjs[segid] = W.model.segments.get(segid).geometry.clone();
-                }				
+                }
                 multiaction.doSubAction(new MoveNode(node, node.geometry, newNodeGeometry, connectedSegObjs, emptyObj));
                 //totalActions +=2;
             }
@@ -662,5 +690,293 @@ var _settings;
             ShiftSegmentNodesLat(segObj, gpsOffsetAmount);
         //}
     }
+
+    //*************** Roundabout Angles **********************
+    function DrawRoundaboutAngles()
+    {
+        //---------get or create layer
+        var layers = W.map.getLayersBy("uniqueName","__DrawRoundaboutAngles");
+
+
+        if(layers.length > 0) {
+            drc_layer = layers[0];
+        } else {
+
+            var drc_style = new OL.Style({
+                fillOpacity: 0.0,
+                strokeOpacity: 1.0,
+                fillColor: "#FF40C0",
+                strokeColor: "${strokeColor}",
+                strokeWidth: 10,
+                fontWeight: "bold",
+                pointRadius: 0,
+                label : "${labelText}",
+                fontFamily: "Tahoma, Courier New",
+                labelOutlineColor: "#FFFFFF",
+                labelOutlineWidth: 3,
+                fontColor: "${labelColor}",
+                fontSize: "10px"
+            });
+
+            drc_layer = new OL.Layer.Vector("Roundabout Angles", {
+                displayInLayerSwitcher: true,
+                uniqueName: "__DrawRoundaboutAngles",
+                styleMap: new OL.StyleMap(drc_style)
+            });
+
+            I18n.translations[I18n.currentLocale()].layers.name["__DrawRoundaboutAngles"] = "Roundabout Angles";
+            W.map.addLayer(drc_layer);
+
+            drc_layer.setVisibility(true);
+        }
+
+        localStorage.WMERAEnabled = drc_layer.visibility;
+
+        if (drc_layer.visibility == false) {
+            drc_layer.removeAllFeatures();
+            return;
+        }
+
+        if (W.map.zoom < 1) {
+            drc_layer.removeAllFeatures();
+            return;
+        }
+
+        //---------collect all roundabouts first
+        var rsegments = {};
+
+        for (var iseg in W.model.segments.objects) {
+            let isegment = W.model.segments.get(iseg);
+            var iattributes = isegment.attributes;
+            var iline = isegment.geometry.id;
+
+            let irid = iattributes.junctionID;
+
+            if (iline !== null && irid != undefined) {
+                var rsegs = rsegments[irid];
+                if (rsegs == undefined) {
+                    rsegments[irid] = rsegs = new Array();
+                }
+                rsegs.push(isegment);
+            }
+        }
+
+        var drc_features = [];
+
+        //-------for each roundabout do...
+        for (let irid in rsegments) {
+            let rsegs = rsegments[irid];
+
+            let isegment = rsegs[0];
+            var jsegment;
+
+            var nodes = [];
+            var nodes_x = [];
+            var nodes_y = [];
+
+            nodes = rsegs.map(seg => seg.attributes.fromNodeID); //get from nodes
+            nodes = [...nodes, ...rsegs.map(seg => seg.attributes.toNodeID)]; //get to nodes add to from nodes
+            nodes = nodes.unique(); //remove duplicates
+
+            var node_objects = W.model.nodes.getByIds(nodes);
+            nodes_x = node_objects.map(n => n.geometry.x); //get all x locations
+            nodes_y = node_objects.map(n => n.geometry.y); //get all y locations
+
+            var sr_x   = 0;
+            var sr_y   = 0;
+            var radius = 0;
+            var numNodes = nodes_x.length;
+
+            if (numNodes >= 1) {
+                var ax = nodes_x[0];
+                var ay = nodes_y[0];
+
+                var junction = W.model.junctions.get(irid);
+                var junction_coords = junction && junction.geometry && junction.geometry.coordinates;
+
+                if (junction_coords && junction_coords.length == 2) {
+                    //---------- get center point from junction model
+                    var lonlat = new OL.LonLat(junction_coords[0], junction_coords[1]);
+                    lonlat.transform(W.map.displayProjection, W.map.projection);
+                    var pt = lonlat.toPoint();
+                    sr_x = pt.x;
+                    sr_y = pt.y;
+                }
+                else if (numNodes >= 3) {
+                    //-----------simple approximation of centre point calculated from three first points
+                    var bx = nodes_x[1];
+                    var by = nodes_y[1];
+                    var cx = nodes_x[2];
+                    var cy = nodes_y[2];
+
+                    var x1 = (bx + ax) * 0.5;
+
+
+                    var y11 = (by + ay) * 0.5;
+                    var dy1 = bx - ax;
+                    var dx1 = -(by - ay);
+                    var x2 = (cx + bx) * 0.5;
+                    var y2 = (cy + by) * 0.5;
+                    var dy2 = cx - bx;
+                    var dx2 = -(cy - by);
+                    sr_x = (y11 * dx1 * dx2 + x2 * dx1 * dy2 - x1 * dy1 * dx2 - y2 * dx1 * dx2)/ (dx1 * dy2 - dy1 * dx2);
+                    sr_y = (sr_x - x1) * dy1 / dx1 + y11;
+                }
+                else {
+                    //---------- simple bounds-based calculation of center point
+                    var rbounds = new OL.Bounds();
+                    rbounds.extend(isegment.geometry.bounds);
+                    rbounds.extend(jsegment.geometry.bounds);
+
+                    var center = rbounds.getCenterPixel();
+                    sr_x = center.x;
+                    sr_y = center.y;
+                }
+
+                var angles = [];
+                var rr = -1;
+                var r_ix;
+
+                for(let i=0; i<nodes_x.length; i++) {
+
+                    var dx = nodes_x[i] - sr_x;
+                    var dy = nodes_y[i] - sr_y;
+
+                    var rr2 = dx*dx + dy*dy;
+                    if (rr < rr2) {
+                        rr = rr2;
+                        r_ix = i;
+                    }
+
+                    var angle = Math.atan2(dy, dx);
+                    angle = (360.0 + (angle * 180.0 / Math.PI));
+                    if (angle < 0.0) angle += 360.0;
+                    if (angle > 360.0) angle -= 360.0;
+                    angles.push(angle);
+                }
+
+                radius = Math.sqrt(rr);
+
+                //---------sorting angles for calulating angle difference between two segments
+                angles = angles.sort(function(a,b) { return a - b; });
+                angles.push( angles[0] + 360.0);
+                angles = angles.sort(function(a,b) { return a - b; });
+
+                var drc_color = (numNodes <= 4) ? "#0040FF" : "#002080";
+
+                var drc_point = new OL.Geometry.Point(sr_x, sr_y );
+                var drc_circle = new OL.Geometry.Polygon.createRegularPolygon( drc_point, radius, 10 * W.map.zoom );
+                var drc_feature = new OL.Feature.Vector(drc_circle, {labelText: "", labelColor: "#000000", strokeColor: drc_color, }  );
+                drc_features.push(drc_feature);
+
+
+                if (numNodes >= 2 && numNodes <= 4 && W.map.zoom >= 5) {
+                    for(let i=0; i<nodes_x.length; i++) {
+                        var ix = nodes_x[i];
+                        var iy = nodes_y[i];
+                        var startPt   = new OL.Geometry.Point( sr_x, sr_y );
+                        var endPt     = new OL.Geometry.Point( ix, iy );
+                        var line      = new OL.Geometry.LineString([startPt, endPt]);
+                        var style     = {strokeColor:drc_color, strokeWidth:2};
+                        var fea       = new OL.Feature.Vector(line, {}, style);
+                        drc_features.push(fea);
+                    }
+
+                    var angles_int = [];
+                    var angles_float = [];
+                    var angles_sum = 0;
+
+                    for(let i=0; i<angles.length - 1; i++) {
+
+                        var ang = angles[i+1] - angles[i+0];
+                        if (ang < 0) ang += 360.0;
+                        if (ang < 0) ang += 360.0;
+
+                        if (ang < 135.0) {
+                            ang = ang - 90.0;
+                        }
+                        else {
+                            ang = ang - 180.0;
+                        }
+
+                        angles_sum += parseInt(ang);
+
+                        angles_float.push( ang );
+                        angles_int.push( parseInt(ang) );
+                    }
+
+                    if (angles_sum > 45) angles_sum -= 90;
+                    if (angles_sum > 45) angles_sum -= 90;
+                    if (angles_sum > 45) angles_sum -= 90;
+                    if (angles_sum > 45) angles_sum -= 90;
+                    if (angles_sum < -45) angles_sum += 90;
+                    if (angles_sum < -45) angles_sum += 90;
+                    if (angles_sum < -45) angles_sum += 90;
+                    if (angles_sum < -45) angles_sum += 90;
+
+                    if (angles_sum != 0) {
+                        for(var i=0; i<angles_int.length; i++) {
+                            var a = angles_int[i];
+                            var af = angles_float[i] - angles_int[i];
+                            if ( (a < 10 || a > 20) && (af < -0.5 || af > 0.5) )  {
+                                angles_int[i] += -angles_sum;
+
+                                break;
+                            }
+                        }
+                    }
+
+                    if (numNodes == 2) {
+                        angles_int[1] = -angles_int[0];
+                        angles_float[1] = -angles_float[0];
+                    }
+
+                    for(let i=0; i<angles.length - 1; i++) {
+                        var arad = (angles[i+0] + angles[i+1]) * 0.5 * Math.PI / 180.0;
+                        var ex = sr_x + Math.cos (arad) * radius * 0.5;
+                        var ey = sr_y + Math.sin (arad) * radius * 0.5;
+
+                        //*** Angle Display Rounding ***
+                        var angint = Math.round(angles_float[i] * 100)/100;
+
+                        var kolor = "#004000";
+                        if (angint <= -15 || angint >= 15) kolor = "#FF0000";
+                        else if (angint <= -13 || angint >= 13) kolor = "#FFC000";
+
+                        var pt = new OL.Geometry.Point(ex, ey);
+                        drc_features.push(new OL.Feature.Vector( pt, {labelText: (angint + "°"), labelColor: kolor } ));
+                        //drc_features.push(new OL.Feature.Vector( pt, {labelText: (+angles_float[i].toFixed(2) + "°"), labelColor: kolor } ));
+                    }
+                }
+                else {
+                    for(let i=0; i < nodes_x.length; i++) {
+                        var ix = nodes_x[i];
+                        var iy = nodes_y[i];
+                        var startPt   = new OL.Geometry.Point( sr_x, sr_y );
+                        var endPt     = new OL.Geometry.Point( ix, iy );
+                        var line      = new OL.Geometry.LineString([startPt, endPt]);
+                        var style     = {strokeColor:drc_color, strokeWidth:2};
+                        var fea       = new OL.Feature.Vector(line, {}, style);
+                        drc_features.push(fea);
+                    }
+                }
+
+                var p1   = new OL.Geometry.Point( nodes_x[r_ix], nodes_y[r_ix] );
+                var p2   = new OL.Geometry.Point( sr_x, sr_y );
+                var line = new OL.Geometry.LineString([p1, p2]);
+                var geo_radius = line.getGeodesicLength(W.map.projection);
+
+                var diam = geo_radius * 2.0;
+                var pt = new OL.Geometry.Point(sr_x, sr_y);
+                drc_features.push(new OL.Feature.Vector( pt, {labelText: (diam.toFixed(0) + "m"), labelColor: "#000000" } ));
+
+            }
+
+        }
+
+        drc_layer.removeAllFeatures();
+        drc_layer.addFeatures(drc_features);
+    }
+
 })();
 
