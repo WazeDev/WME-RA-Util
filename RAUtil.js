@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         WME RA Util
 // @namespace    https://greasyfork.org/users/30701-justins83-waze
-// @version      2018.02.27.01
+// @version      2018.04.10.01
 // @description  Providing basic utility for RA adjustment without the need to delete & recreate
 // @include      https://www.waze.com/editor*
 // @include      https://www.waze.com/*/editor*
@@ -295,8 +295,8 @@ normal RA color:#4cc600
     */
 
     function checkDisplayTool(){
-        if(W.selectionManager.hasSelectedItems() && W.selectionManager.selectedItems[0].model.type === 'segment'){
-            if(!AllSelectedSegmentsRA() || W.selectionManager.selectedItems.length === 0)
+        if(W.selectionManager.hasSelectedItems() && WazeWrap.getSelectedFeatures()[0].model.type === 'segment'){
+            if(!AllSelectedSegmentsRA() || WazeWrap.getSelectedFeatures().length === 0)
                 $('#RAUtilWindow').css({'visibility': 'hidden'});
             else{
                 $('#RAUtilWindow').css({'visibility': 'visible'});
@@ -308,7 +308,7 @@ normal RA color:#4cc600
                         }
                     });
                 //checkSaveChanges();
-                checkAllEditable(WazeWrap.Model.getAllRoundaboutSegmentsFromObj(W.selectionManager.selectedItems[0]));
+                checkAllEditable(WazeWrap.Model.getAllRoundaboutSegmentsFromObj(WazeWrap.getSelectedFeatures()[0]));
             }
         }
         else{
@@ -396,8 +396,8 @@ normal RA color:#4cc600
     }
 
     function AllSelectedSegmentsRA(){
-        for (i = 0; i < W.selectionManager.selectedItems.length; i++){
-            if(W.selectionManager.selectedItems[i].model.attributes.id < 0 || !WazeWrap.Model.isRoundaboutSegmentID(W.selectionManager.selectedItems[i].model.attributes.id))
+        for (i = 0; i < WazeWrap.getSelectedFeatures().length; i++){
+            if(WazeWrap.getSelectedFeatures()[i].model.attributes.id < 0 || !WazeWrap.Model.isRoundaboutSegmentID(WazeWrap.getSelectedFeatures()[i].model.attributes.id))
                 return false;
         }
         return true;
@@ -617,26 +617,26 @@ normal RA color:#4cc600
 
     function diameterChangeDecreaseBtnClick(e){
         e.stopPropagation();
-        var segObj = W.selectionManager.selectedItems[0];
+        var segObj = WazeWrap.getSelectedFeatures()[0];
         ChangeDiameter(segObj, -$('#diameterChangeAmount').val());
     }
 
     function diameterChangeIncreaseBtnClick(e){
         e.stopPropagation();
-        var segObj = W.selectionManager.selectedItems[0];
+        var segObj = WazeWrap.getSelectedFeatures()[0];
         ChangeDiameter(segObj, $('#diameterChangeAmount').val());
     }
 
     function RARotateLeftBtnClick(e){
         e.stopPropagation();
-        var segObj = W.selectionManager.selectedItems[0];
+        var segObj = WazeWrap.getSelectedFeatures()[0];
         RotateRA(segObj, $('#rotationAmount').val());
     }
 
     function RARotateRightBtnClick(e){
         e.stopPropagation();
 
-        var segObj = W.selectionManager.selectedItems[0];
+        var segObj = WazeWrap.getSelectedFeatures()[0];
         RotateRA(segObj, -$('#rotationAmount').val());
     }
 
@@ -647,7 +647,7 @@ normal RA color:#4cc600
         e.stopPropagation();
 
         //if(!pendingChanges){
-            var segObj = W.selectionManager.selectedItems[0];
+            var segObj = WazeWrap.getSelectedFeatures()[0];
             var convertedCoords = WazeWrap.Geometry.ConvertTo4326(segObj.geometry.components[0].x, segObj.geometry.components[0].y);
             var gpsOffsetAmount = WazeWrap.Geometry.CalculateLongOffsetGPS(-$('#shiftAmount').val(), convertedCoords.lon, convertedCoords.lat);
             ShiftSegmentsNodesLong(segObj, gpsOffsetAmount);
@@ -660,7 +660,7 @@ normal RA color:#4cc600
         e.stopPropagation();
 
         //if(!pendingChanges){
-            var segObj = W.selectionManager.selectedItems[0];
+            var segObj = WazeWrap.getSelectedFeatures()[0];
             var convertedCoords = WazeWrap.Geometry.ConvertTo4326(segObj.model.geometry.components[0].x, segObj.model.geometry.components[0].y);
             var gpsOffsetAmount = WazeWrap.Geometry.CalculateLongOffsetGPS($('#shiftAmount').val(), convertedCoords.lon, convertedCoords.lat);
             ShiftSegmentsNodesLong(segObj, gpsOffsetAmount);
@@ -673,7 +673,7 @@ normal RA color:#4cc600
         e.stopPropagation();
 
         //if(!pendingChanges){
-            var segObj = W.selectionManager.selectedItems[0];
+            var segObj = WazeWrap.getSelectedFeatures()[0];
             var gpsOffsetAmount = WazeWrap.Geometry.CalculateLatOffsetGPS($('#shiftAmount').val(), WazeWrap.Geometry.ConvertTo4326(segObj.geometry.components[0].x, segObj.geometry.components[0].y));
             ShiftSegmentNodesLat(segObj, gpsOffsetAmount);
         //}
@@ -685,7 +685,7 @@ normal RA color:#4cc600
         e.stopPropagation();
 
         //if(!pendingChanges){
-            var segObj = W.selectionManager.selectedItems[0];
+            var segObj = WazeWrap.getSelectedFeatures()[0];
             var gpsOffsetAmount = WazeWrap.Geometry.CalculateLatOffsetGPS(-$('#shiftAmount').val(), WazeWrap.Geometry.ConvertTo4326(segObj.geometry.components[0].x, segObj.geometry.components[0].y));
             ShiftSegmentNodesLat(segObj, gpsOffsetAmount);
         //}
