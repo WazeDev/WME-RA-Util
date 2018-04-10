@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         WME RA Util
 // @namespace    https://greasyfork.org/users/30701-justins83-waze
-// @version      2018.04.10.01
+// @version      2018.04.10.02
 // @description  Providing basic utility for RA adjustment without the need to delete & recreate
 // @include      https://www.waze.com/editor*
 // @include      https://www.waze.com/*/editor*
@@ -295,7 +295,7 @@ normal RA color:#4cc600
     */
 
     function checkDisplayTool(){
-        if(W.selectionManager.hasSelectedItems() && WazeWrap.getSelectedFeatures()[0].model.type === 'segment'){
+        if(WazeWrap.hasSelectedFeatures() && WazeWrap.getSelectedFeatures()[0].model.type === 'segment'){
             if(!AllSelectedSegmentsRA() || WazeWrap.getSelectedFeatures().length === 0)
                 $('#RAUtilWindow').css({'visibility': 'hidden'});
             else{
@@ -776,7 +776,7 @@ normal RA color:#4cc600
 
             nodes = rsegs.map(seg => seg.attributes.fromNodeID); //get from nodes
             nodes = [...nodes, ...rsegs.map(seg => seg.attributes.toNodeID)]; //get to nodes add to from nodes
-            nodes = nodes.unique(); //remove duplicates
+            nodes = _.uniq(nodes); //remove duplicates
 
             var node_objects = W.model.nodes.getByIds(nodes);
             nodes_x = node_objects.map(n => n.geometry.x); //get all x locations
