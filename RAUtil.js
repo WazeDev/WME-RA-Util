@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         WME RA Util
 // @namespace    https://greasyfork.org/users/30701-justins83-waze
-// @version      2018.04.10.02
+// @version      2018.05.09.01
 // @description  Providing basic utility for RA adjustment without the need to delete & recreate
 // @include      https://www.waze.com/editor*
 // @include      https://www.waze.com/*/editor*
@@ -499,13 +499,13 @@ normal RA color:#4cc600
     }
 
     function rotatePoints(origin, points, angle){
-        console.log("Origin: " + origin);
-        console.log("Point: " + points[0]);
+        //console.log("Origin: " + origin);
+        //console.log("Point: " + points[0]);
         var lineFeature = new OpenLayers.Feature.Vector(new OpenLayers.Geometry.LineString(points),null,null);
         lineFeature.geometry.rotate(angle, new OpenLayers.Geometry.Point(origin.lon, origin.lat));
-        console.log(new OpenLayers.Geometry.Point(origin.lon, origin.lat).distanceTo(points[0]));
-        console.log(lineFeature.geometry.components[0]);
-        return lineFeature.geometry.components.clone();
+        //console.log(new OpenLayers.Geometry.Point(origin.lon, origin.lat).distanceTo(points[0]));
+        //console.log(lineFeature.geometry.components[0]);
+        return [].concat(lineFeature.geometry.components);
     }
 
     function RotateRA(segObj, angle){
