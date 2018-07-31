@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         WME RA Util
 // @namespace    https://greasyfork.org/users/30701-justins83-waze
-// @version      2018.07.22.01
+// @version      2018.07.31.01
 // @description  Providing basic utility for RA adjustment without the need to delete & recreate
 // @include      https://www.waze.com/editor*
 // @include      https://www.waze.com/*/editor*
@@ -316,15 +316,15 @@ normal RA color:#4cc600
             $('#RAUtilWindow').css({'visibility': 'hidden'});
             if(typeof jQuery.ui !== 'undefined')
                 $('#RAUtilWindow' ).draggable({
-                        stop: function(event, ui) {
-                            $('#RAUtilWindow').css("height", "");
-                            saveSettingsToStorage();
-                        }
-                    });
+                    stop: function(event, ui) {
+                        $('#RAUtilWindow').css("height", "");
+                        saveSettingsToStorage();
+                    }
+                });
         }
     }
 
-    
+
     //var pendingChanges = false;
     /**
     Returns false if there are pending changes, true if no changes need saved.
@@ -352,8 +352,8 @@ normal RA color:#4cc600
         var allEditable = true;
         var segObj, fromNode, toNode;
 
-        for(i=0; i<RASegs.length;i++){
-            segObj = W.model.segments.get(RASegs[i]);
+        for(let i=0; i<RASegs.length;i++){
+            segObj = W.model.segments.getObjectById(RASegs[i]);
             fromNode = segObj.getFromNode();
             toNode = segObj.getToNode();
 
@@ -367,8 +367,8 @@ normal RA color:#4cc600
                 if(toNode){
                     toConnected = toNode.attributes.segIDs;
                     for(j=0;j<toConnected.length;j++){
-                        if(W.model.segments.get(toConnected[j]) !== "undefined")
-                            if(W.model.segments.get(toConnected[j]).hasClosures())
+                        if(W.model.segments.getObjectById(toConnected[j]) !== "undefined")
+                            if(W.model.segments.getObjectById(toConnected[j]).hasClosures())
                                 allEditable = false;
                     }
                 }
@@ -376,16 +376,15 @@ normal RA color:#4cc600
                 if(fromNode){
                     fromConnected = fromNode.attributes.segIDs;
                     for(j=0;j<fromConnected.length;j++){
-                        if(W.model.segments.get(fromConnected[j]) !== "undefined")
-                            if(W.model.segments.get(fromConnected[j]).hasClosures())
+                        if(W.model.segments.getObjectById(fromConnected[j]) !== "undefined")
+                            if(W.model.segments.getObjectById(fromConnected[j]).hasClosures())
                                 allEditable = false;
                     }
                 }
             }
         }
-        if(allEditable){
+        if(allEditable)
             $RAEditable.remove();
-        }
         else{
             if($RAEditable.length === 0){
                 $RAEditable = $('<div>', {id:'RAEditable', style:'color:red'});
@@ -413,8 +412,8 @@ normal RA color:#4cc600
             var multiaction = new MultiAction();
             multiaction.setModel(W.model);
 
-            for(i=0; i<RASegs.length; i++){
-                segObj = W.model.segments.get(RASegs[i]);
+            for(let i=0; i<RASegs.length; i++){
+                segObj = W.model.segments.getObjectById(RASegs[i]);
                 newGeometry = segObj.geometry.clone();
                 originalLength = segObj.geometry.components.length;
                 for(j=1; j < originalLength-1; j++){
@@ -441,7 +440,7 @@ normal RA color:#4cc600
                 var emptyObj = {};
                 for(var j=0;j<node.attributes.segIDs.length;j++){
                     var segid = node.attributes.segIDs[j];
-                    connectedSegObjs[segid] = W.model.segments.get(segid).geometry.clone();
+                    connectedSegObjs[segid] = W.model.segments.getObjectById(segid).geometry.clone();
                 }
                 //W.model.actionManager.add(new MoveNode(segObj, segObj.geometry, newNodeGeometry, connectedSegObjs, i));
                 multiaction.doSubAction(new MoveNode(node, node.geometry, newNodeGeometry,connectedSegObjs,emptyObj));
@@ -452,7 +451,7 @@ normal RA color:#4cc600
         }
     }
 
-    function ShiftSegmentsNodesLong(segObj, longOffset)    {
+    function ShiftSegmentsNodesLong(segObj, longOffset){
         var RASegs = WazeWrap.Model.getAllRoundaboutSegmentsFromObj(segObj);
         if(checkAllEditable(RASegs)){
             var gps, newGeometry, originalLength;
@@ -460,8 +459,8 @@ normal RA color:#4cc600
             multiaction.setModel(W.model);
 
             //Loop through all RA segments & adjust
-            for(i=0; i<RASegs.length; i++){
-                segObj = W.model.segments.get(RASegs[i]);
+            for(let i=0; i<RASegs.length; i++){
+                segObj = W.model.segments.getObjectById(RASegs[i]);
                 newGeometry = segObj.geometry.clone();
                 originalLength = segObj.geometry.components.length;
                 for(j=1; j < originalLength-1; j++){
@@ -487,9 +486,9 @@ normal RA color:#4cc600
 
                 var connectedSegObjs = {};
                 var emptyObj = {};
-                for(var j=0;j<node.attributes.segIDs.length;j++){
+                for(let j=0;j<node.attributes.segIDs.length;j++){
                     var segid = node.attributes.segIDs[j];
-                    connectedSegObjs[segid] = W.model.segments.get(segid).geometry.clone();
+                    connectedSegObjs[segid] = W.model.segments.getObjectById(segid).geometry.clone();
                 }
                 //W.model.actionManager.add(new MoveNode(node, node.geometry, newNodeGeometry));
                 multiaction.doSubAction(new MoveNode(node, node.geometry, newNodeGeometry, connectedSegObjs, emptyObj));
@@ -519,8 +518,8 @@ normal RA color:#4cc600
             multiaction.setModel(W.model);
 
             //Loop through all RA segments & adjust
-            for(i=0; i<RASegs.length; i++){
-                segObj = W.model.segments.get(RASegs[i]);
+            for(let i=0; i<RASegs.length; i++){
+                segObj = W.model.segments.getObjectById(RASegs[i]);
                 newGeometry = segObj.geometry.clone();
                 originalLength = segObj.geometry.components.length;
 
@@ -563,9 +562,9 @@ normal RA color:#4cc600
 
                 var connectedSegObjs = {};
                 var emptyObj = {};
-                for(var j=0;j<node.attributes.segIDs.length;j++){
+                for(let j=0;j<node.attributes.segIDs.length;j++){
                     var segid = node.attributes.segIDs[j];
-                    connectedSegObjs[segid] = W.model.segments.get(segid).geometry.clone();
+                    connectedSegObjs[segid] = W.model.segments.getObjectById(segid).geometry.clone();
                 }
                 multiaction.doSubAction(new MoveNode(node, node.geometry, newNodeGeometry, connectedSegObjs, emptyObj));
                 //totalActions +=2;
@@ -583,8 +582,8 @@ normal RA color:#4cc600
 
             var center = WazeWrap.Geometry.ConvertTo900913(raCenter[0], raCenter[1]);
             //Loop through all RA segments & adjust
-            for(i=0; i<RASegs.length; i++){
-                segObj = W.model.segments.get(RASegs[i]);
+            for(let i=0; i<RASegs.length; i++){
+                segObj = W.model.segments.getObjectById(RASegs[i]);
                 newGeometry = segObj.geometry.clone();
                 originalLength = segObj.geometry.components.length;
                 for(j=1; j < originalLength-1; j++){
@@ -642,67 +641,60 @@ normal RA color:#4cc600
     }
 
     //Left
-    function RAShiftLeftBtnClick(e)
-    {
+    function RAShiftLeftBtnClick(e){
         // this traps the click to prevent it falling through to the underlying area name element and potentially causing the map view to be relocated to that area...
         e.stopPropagation();
 
         //if(!pendingChanges){
-            var segObj = WazeWrap.getSelectedFeatures()[0];
-            var convertedCoords = WazeWrap.Geometry.ConvertTo4326(segObj.geometry.components[0].x, segObj.geometry.components[0].y);
-            var gpsOffsetAmount = WazeWrap.Geometry.CalculateLongOffsetGPS(-$('#shiftAmount').val(), convertedCoords.lon, convertedCoords.lat);
-            ShiftSegmentsNodesLong(segObj, gpsOffsetAmount);
+        var segObj = WazeWrap.getSelectedFeatures()[0];
+        var convertedCoords = WazeWrap.Geometry.ConvertTo4326(segObj.geometry.components[0].x, segObj.geometry.components[0].y);
+        var gpsOffsetAmount = WazeWrap.Geometry.CalculateLongOffsetGPS(-$('#shiftAmount').val(), convertedCoords.lon, convertedCoords.lat);
+        ShiftSegmentsNodesLong(segObj, gpsOffsetAmount);
         //}
     }
     //Right
-    function RAShiftRightBtnClick(e)
-    {
+    function RAShiftRightBtnClick(e){
         // this traps the click to prevent it falling through to the underlying area name element and potentially causing the map view to be relocated to that area...
         e.stopPropagation();
 
         //if(!pendingChanges){
-            var segObj = WazeWrap.getSelectedFeatures()[0];
-            var convertedCoords = WazeWrap.Geometry.ConvertTo4326(segObj.model.geometry.components[0].x, segObj.model.geometry.components[0].y);
-            var gpsOffsetAmount = WazeWrap.Geometry.CalculateLongOffsetGPS($('#shiftAmount').val(), convertedCoords.lon, convertedCoords.lat);
-            ShiftSegmentsNodesLong(segObj, gpsOffsetAmount);
+        var segObj = WazeWrap.getSelectedFeatures()[0];
+        var convertedCoords = WazeWrap.Geometry.ConvertTo4326(segObj.model.geometry.components[0].x, segObj.model.geometry.components[0].y);
+        var gpsOffsetAmount = WazeWrap.Geometry.CalculateLongOffsetGPS($('#shiftAmount').val(), convertedCoords.lon, convertedCoords.lat);
+        ShiftSegmentsNodesLong(segObj, gpsOffsetAmount);
         //}
     }
     //Up
-    function RAShiftUpBtnClick(e)
-    {
+    function RAShiftUpBtnClick(e){
         // this traps the click to prevent it falling through to the underlying area name element and potentially causing the map view to be relocated to that area...
         e.stopPropagation();
 
         //if(!pendingChanges){
-            var segObj = WazeWrap.getSelectedFeatures()[0];
-            var gpsOffsetAmount = WazeWrap.Geometry.CalculateLatOffsetGPS($('#shiftAmount').val(), WazeWrap.Geometry.ConvertTo4326(segObj.geometry.components[0].x, segObj.geometry.components[0].y));
-            ShiftSegmentNodesLat(segObj, gpsOffsetAmount);
+        var segObj = WazeWrap.getSelectedFeatures()[0];
+        var gpsOffsetAmount = WazeWrap.Geometry.CalculateLatOffsetGPS($('#shiftAmount').val(), WazeWrap.Geometry.ConvertTo4326(segObj.geometry.components[0].x, segObj.geometry.components[0].y));
+        ShiftSegmentNodesLat(segObj, gpsOffsetAmount);
         //}
     }
     //Down
-    function RAShiftDownBtnClick(e)
-    {
+    function RAShiftDownBtnClick(e){
         // this traps the click to prevent it falling through to the underlying area name element and potentially causing the map view to be relocated to that area...
         e.stopPropagation();
 
         //if(!pendingChanges){
-            var segObj = WazeWrap.getSelectedFeatures()[0];
-            var gpsOffsetAmount = WazeWrap.Geometry.CalculateLatOffsetGPS(-$('#shiftAmount').val(), WazeWrap.Geometry.ConvertTo4326(segObj.geometry.components[0].x, segObj.geometry.components[0].y));
-            ShiftSegmentNodesLat(segObj, gpsOffsetAmount);
+        var segObj = WazeWrap.getSelectedFeatures()[0];
+        var gpsOffsetAmount = WazeWrap.Geometry.CalculateLatOffsetGPS(-$('#shiftAmount').val(), WazeWrap.Geometry.ConvertTo4326(segObj.geometry.components[0].x, segObj.geometry.components[0].y));
+        ShiftSegmentNodesLat(segObj, gpsOffsetAmount);
         //}
     }
 
     //*************** Roundabout Angles **********************
-    function DrawRoundaboutAngles()
-    {
+    function DrawRoundaboutAngles(){
         //---------get or create layer
         var layers = W.map.getLayersBy("uniqueName","__DrawRoundaboutAngles");
 
-
-        if(layers.length > 0) {
+        if(layers.length > 0)
             drc_layer = layers[0];
-        } else {
-
+        else {
             var drc_style = new OL.Style({
                 fillOpacity: 0.0,
                 strokeOpacity: 1.0,
@@ -747,7 +739,7 @@ normal RA color:#4cc600
         var rsegments = {};
 
         for (var iseg in W.model.segments.objects) {
-            let isegment = W.model.segments.get(iseg);
+            let isegment = W.model.segments.getObjectById(iseg);
             var iattributes = isegment.attributes;
             var iline = isegment.geometry.id;
 
@@ -783,8 +775,8 @@ normal RA color:#4cc600
             nodes_x = node_objects.map(n => n.geometry.x); //get all x locations
             nodes_y = node_objects.map(n => n.geometry.y); //get all y locations
 
-            var sr_x   = 0;
-            var sr_y   = 0;
+            var sr_x = 0;
+            var sr_y = 0;
             var radius = 0;
             var numNodes = nodes_x.length;
 
@@ -792,7 +784,7 @@ normal RA color:#4cc600
                 var ax = nodes_x[0];
                 var ay = nodes_y[0];
 
-                var junction = W.model.junctions.get(irid);
+                var junction = W.model.junctions.getObjectById(irid);
                 var junction_coords = junction && junction.geometry && junction.geometry.coordinates;
 
                 if (junction_coords && junction_coords.length == 2) {
