@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         WME RA Util
 // @namespace    https://greasyfork.org/users/30701-justins83-waze
-// @version      2018.07.31.01
+// @version      2019.03.07.01
 // @description  Providing basic utility for RA adjustment without the need to delete & recreate
 // @include      https://www.waze.com/editor*
 // @include      https://www.waze.com/*/editor*
@@ -16,6 +16,9 @@
 
 /* global W */
 /* global WazeWrap */
+/* global OL */
+/* global require */
+/* global $ */
 
 /*
 Todo:
@@ -33,6 +36,7 @@ normal RA color:#4cc600
 
     //var totalActions = 0;
     var _settings;
+    const updateMessage = "Fixing an issue caused by the recent WME update.  The roundabout angles display should work again.";
 
     function bootstrap(tries) {
         tries = tries || 1;
@@ -265,6 +269,8 @@ normal RA color:#4cc600
             W.map.events.register("moveend", null, DrawRoundaboutAngles);
             DrawRoundaboutAngles();
         }
+
+        WazeWrap.Interface.ShowScriptUpdate("WME RA Util", GM_info.script.version, updateMessage, "https://greasyfork.org/en/scripts/23616-wme-ra-util", "https://www.waze.com/forum/viewtopic.php?f=819&t=215990");
     }
 
     function saveSettingsToStorage() {
@@ -791,7 +797,7 @@ normal RA color:#4cc600
                     //---------- get center point from junction model
                     var lonlat = new OL.LonLat(junction_coords[0], junction_coords[1]);
                     lonlat.transform(W.map.displayProjection, W.map.projection);
-                    var pt = lonlat.toPoint();
+                    var pt = new OL.Geometry.Point(lonlat.lon, lonlat.lat);
                     sr_x = pt.x;
                     sr_y = pt.y;
                 }
