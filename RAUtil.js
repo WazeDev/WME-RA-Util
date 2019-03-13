@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         WME RA Util
 // @namespace    https://greasyfork.org/users/30701-justins83-waze
-// @version      2019.03.13.01
+// @version      2019.03.13.02
 // @description  Providing basic utility for RA adjustment without the need to delete & recreate
 // @include      https://www.waze.com/editor*
 // @include      https://www.waze.com/*/editor*
@@ -45,7 +45,7 @@ normal RA color:#4cc600
 
         if (window.W && window.W.map &&
             window.W.model && window.require &&
-            WazeWrap)
+            WazeWrap.Ready)
             init();
         else if (tries < 1000)
             setTimeout(function () {bootstrap(tries++);}, 200);
