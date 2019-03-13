@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         WME RA Util
 // @namespace    https://greasyfork.org/users/30701-justins83-waze
-// @version      2019.03.07.01
+// @version      2019.03.13.01
 // @description  Providing basic utility for RA adjustment without the need to delete & recreate
 // @include      https://www.waze.com/editor*
 // @include      https://www.waze.com/*/editor*
@@ -19,6 +19,9 @@
 /* global OL */
 /* global require */
 /* global $ */
+/* global _ */
+/* global I18n */
+/* eslint curly: ["warn", "multi-or-nest"] */
 
 /*
 Todo:
@@ -36,22 +39,16 @@ normal RA color:#4cc600
 
     //var totalActions = 0;
     var _settings;
-    const updateMessage = "Fixing an issue caused by the recent WME update.  The roundabout angles display should work again.";
+    const updateMessage = "Minor code cleanup.";
 
-    function bootstrap(tries) {
-        tries = tries || 1;
+    function bootstrap(tries = 1) {
 
-        if (window.W &&
-            window.W.map &&
-            window.W.model &&
-            window.require &&
-            WazeWrap) {
-
+        if (window.W && window.W.map &&
+            window.W.model && window.require &&
+            WazeWrap)
             init();
-
-        } else if (tries < 1000) {
+        else if (tries < 1000)
             setTimeout(function () {bootstrap(tries++);}, 200);
-        }
     }
 
     bootstrap();
@@ -200,15 +197,13 @@ normal RA color:#4cc600
         //document.getElementById('diameterChangeIncreaseBtn').addEventListener('click', diameterChangeIncreaseBtnClick, false);
 
         $('#shiftAmount').keypress(function(event) {
-            if ((event.which != 46 || $(this).val().indexOf('.') != -1) && (event.which < 48 || event.which > 57)) {
+            if ((event.which != 46 || $(this).val().indexOf('.') != -1) && (event.which < 48 || event.which > 57))
                 event.preventDefault();
-            }
         });
 
         $('#rotationAmount').keypress(function(event) {
-            if ((event.which != 46 || $(this).val().indexOf('.') != -1) && (event.which < 48 || event.which > 57)) {
+            if ((event.which != 46 || $(this).val().indexOf('.') != -1) && (event.which < 48 || event.which > 57))
                 event.preventDefault();
-            }
         });
 
         $('#collapserLink').click(function(){
@@ -372,7 +367,7 @@ normal RA color:#4cc600
 
                 if(toNode){
                     toConnected = toNode.attributes.segIDs;
-                    for(j=0;j<toConnected.length;j++){
+                    for(let j=0;j<toConnected.length;j++){
                         if(W.model.segments.getObjectById(toConnected[j]) !== "undefined")
                             if(W.model.segments.getObjectById(toConnected[j]).hasClosures())
                                 allEditable = false;
@@ -381,7 +376,7 @@ normal RA color:#4cc600
 
                 if(fromNode){
                     fromConnected = fromNode.attributes.segIDs;
-                    for(j=0;j<fromConnected.length;j++){
+                    for(let j=0;j<fromConnected.length;j++){
                         if(W.model.segments.getObjectById(fromConnected[j]) !== "undefined")
                             if(W.model.segments.getObjectById(fromConnected[j]).hasClosures())
                                 allEditable = false;
@@ -402,7 +397,7 @@ normal RA color:#4cc600
     }
 
     function AllSelectedSegmentsRA(){
-        for (i = 0; i < WazeWrap.getSelectedFeatures().length; i++){
+        for (let i = 0; i < WazeWrap.getSelectedFeatures().length; i++){
             if(WazeWrap.getSelectedFeatures()[i].model.attributes.id < 0 || !WazeWrap.Model.isRoundaboutSegmentID(WazeWrap.getSelectedFeatures()[i].model.attributes.id))
                 return false;
         }
@@ -469,7 +464,7 @@ normal RA color:#4cc600
                 segObj = W.model.segments.getObjectById(RASegs[i]);
                 newGeometry = segObj.geometry.clone();
                 originalLength = segObj.geometry.components.length;
-                for(j=1; j < originalLength-1; j++){
+                for(let j=1; j < originalLength-1; j++){
                     gps = WazeWrap.Geometry.ConvertTo4326(segObj.geometry.components[j].x, segObj.geometry.components[j].y);
                     gps.lon += longOffset;
                     newGeometry.components.splice(j,0, new OL.Geometry.Point(WazeWrap.Geometry.ConvertTo900913(gps.lon, segObj.geometry.components[j].y).lon, segObj.geometry.components[j].y));
@@ -507,9 +502,9 @@ normal RA color:#4cc600
     function rotatePoints(origin, points, angle){
         //console.log("Origin: " + origin);
         //console.log("Point: " + points[0]);
-        var lineFeature = new OpenLayers.Feature.Vector(new OpenLayers.Geometry.LineString(points),null,null);
-        lineFeature.geometry.rotate(angle, new OpenLayers.Geometry.Point(origin.lon, origin.lat));
-        //console.log(new OpenLayers.Geometry.Point(origin.lon, origin.lat).distanceTo(points[0]));
+        var lineFeature = new OL.Feature.Vector(new OL.Geometry.LineString(points),null,null);
+        lineFeature.geometry.rotate(angle, new OL.Geometry.Point(origin.lon, origin.lat));
+        //console.log(new OL.Geometry.Point(origin.lon, origin.lat).distanceTo(points[0]));
         //console.log(lineFeature.geometry.components[0]);
         return [].concat(lineFeature.geometry.components);
     }
@@ -532,13 +527,12 @@ normal RA color:#4cc600
                 var center = WazeWrap.Geometry.ConvertTo900913(raCenter[0], raCenter[1]);
                 var segPoints = [];
                 //Have to copy the points manually (can't use .clone()) otherwise the geometry rotation modifies the geometry of the segment itself and that hoses WME.
-                for(j=0; j<originalLength;j++){
+                for(let j=0; j<originalLength;j++)
                     segPoints.push(new OL.Geometry.Point(segObj.geometry.components[j].x, segObj.geometry.components[j].y));
-                }
 
                 var newPoints = rotatePoints(center, segPoints, angle);
 
-                for(j=1; j<originalLength-1;j++){
+                for(let j=1; j<originalLength-1;j++){
                     newGeometry.components.splice(j, 0, new OL.Geometry.Point(newPoints[j].x, newPoints[j].y));
                     newGeometry.components.splice(j+1,1);
                 }
@@ -592,7 +586,7 @@ normal RA color:#4cc600
                 segObj = W.model.segments.getObjectById(RASegs[i]);
                 newGeometry = segObj.geometry.clone();
                 originalLength = segObj.geometry.components.length;
-                for(j=1; j < originalLength-1; j++){
+                for(let j=1; j < originalLength-1; j++){
                     gps = WazeWrap.Geometry.ConvertTo4326(segObj.geometry.components[j].x, segObj.geometry.components[j].y);
                     var k = Math.atan2(origin.y - gps.lat, origin.x - gps.lon);
 
@@ -753,9 +747,8 @@ normal RA color:#4cc600
 
             if (iline !== null && irid != undefined) {
                 var rsegs = rsegments[irid];
-                if (rsegs == undefined) {
+                if (rsegs == undefined)
                     rsegments[irid] = rsegs = new Array();
-                }
                 rsegs.push(isegment);
             }
         }
@@ -795,29 +788,27 @@ normal RA color:#4cc600
 
                 if (junction_coords && junction_coords.length == 2) {
                     //---------- get center point from junction model
-                    var lonlat = new OL.LonLat(junction_coords[0], junction_coords[1]);
+                    let lonlat = new OL.LonLat(junction_coords[0], junction_coords[1]);
                     lonlat.transform(W.map.displayProjection, W.map.projection);
-                    var pt = new OL.Geometry.Point(lonlat.lon, lonlat.lat);
+                    let pt = new OL.Geometry.Point(lonlat.lon, lonlat.lat);
                     sr_x = pt.x;
                     sr_y = pt.y;
                 }
                 else if (numNodes >= 3) {
                     //-----------simple approximation of centre point calculated from three first points
-                    var bx = nodes_x[1];
-                    var by = nodes_y[1];
-                    var cx = nodes_x[2];
-                    var cy = nodes_y[2];
+                    let bx = nodes_x[1];
+                    let by = nodes_y[1];
+                    let cx = nodes_x[2];
+                    let cy = nodes_y[2];
 
-                    var x1 = (bx + ax) * 0.5;
-
-
-                    var y11 = (by + ay) * 0.5;
-                    var dy1 = bx - ax;
-                    var dx1 = -(by - ay);
-                    var x2 = (cx + bx) * 0.5;
-                    var y2 = (cy + by) * 0.5;
-                    var dy2 = cx - bx;
-                    var dx2 = -(cy - by);
+                    let x1 = (bx + ax) * 0.5;
+                    let y11 = (by + ay) * 0.5;
+                    let dy1 = bx - ax;
+                    let dx1 = -(by - ay);
+                    let x2 = (cx + bx) * 0.5;
+                    let y2 = (cy + by) * 0.5;
+                    let dy2 = cx - bx;
+                    let dx2 = -(cy - by);
                     sr_x = (y11 * dx1 * dx2 + x2 * dx1 * dy2 - x1 * dy1 * dx2 - y2 * dx1 * dx2)/ (dx1 * dy2 - dy1 * dx2);
                     sr_y = (sr_x - x1) * dy1 / dx1 + y11;
                 }
@@ -865,19 +856,19 @@ normal RA color:#4cc600
 
                 var drc_point = new OL.Geometry.Point(sr_x, sr_y );
                 var drc_circle = new OL.Geometry.Polygon.createRegularPolygon( drc_point, radius, 10 * W.map.zoom );
-                var drc_feature = new OL.Feature.Vector(drc_circle, {labelText: "", labelColor: "#000000", strokeColor: drc_color, }  );
+                var drc_feature = new OL.Feature.Vector(drc_circle, {labelText: "", labelColor: "#000000", strokeColor: drc_color, });
                 drc_features.push(drc_feature);
 
 
                 if (numNodes >= 2 && numNodes <= 4 && W.map.zoom >= 5) {
                     for(let i=0; i<nodes_x.length; i++) {
-                        var ix = nodes_x[i];
-                        var iy = nodes_y[i];
-                        var startPt   = new OL.Geometry.Point( sr_x, sr_y );
-                        var endPt     = new OL.Geometry.Point( ix, iy );
-                        var line      = new OL.Geometry.LineString([startPt, endPt]);
-                        var style     = {strokeColor:drc_color, strokeWidth:2};
-                        var fea       = new OL.Feature.Vector(line, {}, style);
+                        let ix = nodes_x[i];
+                        let iy = nodes_y[i];
+                        let startPt   = new OL.Geometry.Point( sr_x, sr_y );
+                        let endPt     = new OL.Geometry.Point( ix, iy );
+                        let line      = new OL.Geometry.LineString([startPt, endPt]);
+                        let style     = {strokeColor:drc_color, strokeWidth:2};
+                        let fea       = new OL.Feature.Vector(line, {}, style);
                         drc_features.push(fea);
                     }
 
@@ -891,12 +882,10 @@ normal RA color:#4cc600
                         if (ang < 0) ang += 360.0;
                         if (ang < 0) ang += 360.0;
 
-                        if (ang < 135.0) {
+                        if (ang < 135.0)
                             ang = ang - 90.0;
-                        }
-                        else {
+                        else
                             ang = ang - 180.0;
-                        }
 
                         angles_sum += parseInt(ang);
 
@@ -912,12 +901,11 @@ normal RA color:#4cc600
                     if (angles_sum < -45) angles_sum += 90;
                     if (angles_sum < -45) angles_sum += 90;
                     if (angles_sum < -45) angles_sum += 90;
-
                     if (angles_sum != 0) {
-                        for(var i=0; i<angles_int.length; i++) {
-                            var a = angles_int[i];
-                            var af = angles_float[i] - angles_int[i];
-                            if ( (a < 10 || a > 20) && (af < -0.5 || af > 0.5) )  {
+                        for(let i=0; i<angles_int.length; i++) {
+                            let a = angles_int[i];
+                            let af = angles_float[i] - angles_int[i];
+                            if ( (a < 10 || a > 20) && (af < -0.5 || af > 0.5)){
                                 angles_int[i] += -angles_sum;
 
                                 break;
@@ -931,42 +919,42 @@ normal RA color:#4cc600
                     }
 
                     for(let i=0; i<angles.length - 1; i++) {
-                        var arad = (angles[i+0] + angles[i+1]) * 0.5 * Math.PI / 180.0;
-                        var ex = sr_x + Math.cos (arad) * radius * 0.5;
-                        var ey = sr_y + Math.sin (arad) * radius * 0.5;
+                        let arad = (angles[i+0] + angles[i+1]) * 0.5 * Math.PI / 180.0;
+                        let ex = sr_x + Math.cos (arad) * radius * 0.5;
+                        let ey = sr_y + Math.sin (arad) * radius * 0.5;
 
                         //*** Angle Display Rounding ***
-                        var angint = Math.round(angles_float[i] * 100)/100;
+                        let angint = Math.round(angles_float[i] * 100)/100;
 
-                        var kolor = "#004000";
+                        let kolor = "#004000";
                         if (angint <= -15 || angint >= 15) kolor = "#FF0000";
                         else if (angint <= -13 || angint >= 13) kolor = "#FFC000";
 
-                        var pt = new OL.Geometry.Point(ex, ey);
+                        let pt = new OL.Geometry.Point(ex, ey);
                         drc_features.push(new OL.Feature.Vector( pt, {labelText: (angint + "°"), labelColor: kolor } ));
                         //drc_features.push(new OL.Feature.Vector( pt, {labelText: (+angles_float[i].toFixed(2) + "°"), labelColor: kolor } ));
                     }
                 }
                 else {
                     for(let i=0; i < nodes_x.length; i++) {
-                        var ix = nodes_x[i];
-                        var iy = nodes_y[i];
-                        var startPt   = new OL.Geometry.Point( sr_x, sr_y );
-                        var endPt     = new OL.Geometry.Point( ix, iy );
-                        var line      = new OL.Geometry.LineString([startPt, endPt]);
-                        var style     = {strokeColor:drc_color, strokeWidth:2};
-                        var fea       = new OL.Feature.Vector(line, {}, style);
+                        let ix = nodes_x[i];
+                        let iy = nodes_y[i];
+                        let startPt = new OL.Geometry.Point( sr_x, sr_y );
+                        let endPt = new OL.Geometry.Point( ix, iy );
+                        let line = new OL.Geometry.LineString([startPt, endPt]);
+                        let style = {strokeColor:drc_color, strokeWidth:2};
+                        let fea = new OL.Feature.Vector(line, {}, style);
                         drc_features.push(fea);
                     }
                 }
 
-                var p1   = new OL.Geometry.Point( nodes_x[r_ix], nodes_y[r_ix] );
-                var p2   = new OL.Geometry.Point( sr_x, sr_y );
-                var line = new OL.Geometry.LineString([p1, p2]);
-                var geo_radius = line.getGeodesicLength(W.map.projection);
+                let p1 = new OL.Geometry.Point( nodes_x[r_ix], nodes_y[r_ix] );
+                let p2 = new OL.Geometry.Point( sr_x, sr_y );
+                let line = new OL.Geometry.LineString([p1, p2]);
+                let geo_radius = line.getGeodesicLength(W.map.projection);
 
-                var diam = geo_radius * 2.0;
-                var pt = new OL.Geometry.Point(sr_x, sr_y);
+                let diam = geo_radius * 2.0;
+                let pt = new OL.Geometry.Point(sr_x, sr_y);
                 drc_features.push(new OL.Feature.Vector( pt, {labelText: (diam.toFixed(0) + "m"), labelColor: "#000000" } ));
 
             }
