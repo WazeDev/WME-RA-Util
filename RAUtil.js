@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         WME RA Util
 // @namespace    https://greasyfork.org/users/30701-justins83-waze
-// @version      2019.03.21.01
+// @version      2019.03.21.02
 // @description  Providing basic utility for RA adjustment without the need to delete & recreate
 // @include      https://www.waze.com/editor*
 // @include      https://www.waze.com/*/editor*
@@ -39,7 +39,7 @@ normal RA color:#4cc600
 
     //var totalActions = 0;
     var _settings;
-    const updateMessage = "Roundabout expansion/contraction is now available! Woo hoo!";
+    const updateMessage = "Recalculating radius via Roundabout Angles after adjusting the diameter.<br/><br/><h4>.01</h4>Roundabout expansion/contraction is now available! Woo hoo!";
 
     function bootstrap(tries = 1) {
 
@@ -617,6 +617,7 @@ normal RA color:#4cc600
                 }
                 W.model.actionManager.add(new MoveNode(node, node.geometry, newNodeGeometry, connectedSegObjs, emptyObj));
             }
+            DrawRoundaboutAngles();
         }
     }
 
