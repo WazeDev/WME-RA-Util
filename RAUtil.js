@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         WME RA Util
 // @namespace    https://greasyfork.org/users/30701-justins83-waze
-// @version      2019.03.27.01
+// @version      2019.03.27.02
 // @description  Providing basic utility for RA adjustment without the need to delete & recreate
 // @include      https://www.waze.com/editor*
 // @include      https://www.waze.com/*/editor*
@@ -691,6 +691,8 @@ normal RA color:#4cc600
             }
             multiaction.doSubAction(new MoveNode(node, node.geometry, newNodeGeometry,connectedSegObjs,emptyObj));
             W.model.actionManager.add(multiaction);
+
+            DrawRoundaboutAngles();
         }
     }
 
@@ -744,6 +746,8 @@ normal RA color:#4cc600
             }
             multiaction.doSubAction(new MoveNode(node, node.geometry, newNodeGeometry,connectedSegObjs,emptyObj));
             W.model.actionManager.add(multiaction);
+
+            DrawRoundaboutAngles();
         }
     }
 
