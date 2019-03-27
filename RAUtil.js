@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         WME RA Util
 // @namespace    https://greasyfork.org/users/30701-justins83-waze
-// @version      2019.03.21.02
+// @version      2019.03.27.01
 // @description  Providing basic utility for RA adjustment without the need to delete & recreate
 // @include      https://www.waze.com/editor*
 // @include      https://www.waze.com/*/editor*
@@ -39,7 +39,7 @@ normal RA color:#4cc600
 
     //var totalActions = 0;
     var _settings;
-    const updateMessage = "Recalculating radius via Roundabout Angles after adjusting the diameter.<br/><br/><h4>.01</h4>Roundabout expansion/contraction is now available! Woo hoo!";
+    const updateMessage = "Added the ability to shift the A & B nodes of a roundabout segment along the roundabout so it isn't necessary to disconnect and reconnect after adjusting the size/position and the node no longer lines up.  See the forum for more information.";
 
     function bootstrap(tries = 1) {
 
@@ -65,7 +65,7 @@ normal RA color:#4cc600
         RAUtilWindow.style.visibility = 'hidden';
         RAUtilWindow.style.top = '15%';
         RAUtilWindow.style.left = '25%';
-        RAUtilWindow.style.width = 'auto'; //390px
+        RAUtilWindow.style.width = '480px';
         RAUtilWindow.style.zIndex = 100;
         RAUtilWindow.style.backgroundColor = '#BEDCE5';
         RAUtilWindow.style.borderWidth = '3px';
@@ -129,10 +129,10 @@ normal RA color:#4cc600
 
 
         //***************** Rotation **************************
-        alertsHTML += '<div id="contentRotate" style="padding: 4px; background-color:White;  display:inline-block; border-style:solid; border-width:1px; margin-right:5px;">';
+        alertsHTML += '<div id="contentRotate" style="padding: 4px; background-color:White;  display:inline-block; border-style:solid; border-width:1px; height:152px;  margin-right:5px;">';
         alertsHTML += 'Rotation amount</br><input type="text" name="rotationAmount" id="rotationAmount" size="1" style="border: 1px solid #000000" value="1"/> degree(s)&nbsp;';
         alertsHTML += '<div id="rotationControls" style="padding: 4px;">';
-        alertsHTML += '<table style="table-layout:fixed; width:60px; height:84px; margin-left:auto; margin-right:auto;">';
+        alertsHTML += '<table style="table-layout:fixed; width:60px; height:55px; margin-left:auto; margin-right:auto;">';
         alertsHTML += '<tr style="width:20px;height:28px;">';
         alertsHTML += '<td align="center">';
         alertsHTML += '<span id="RARotateLeftBtn" style="cursor:pointer;font-size:14px;border:thin outset black;padding:2px;">';//margin-left:23px;">';
@@ -152,13 +152,13 @@ normal RA color:#4cc600
 
         //********************* Diameter change ******************
 
-        alertsHTML += '<div id="diameterChange" style="padding: 4px; padding-top:11px; background-color:White; display:inline-block; border-style:solid; border-width:1px; height:152px; text-align:center;" >';
+        alertsHTML += '<div id="diameterChange" style="padding: 4px; padding-top:11px; background-color:White; display:inline-block; border-style:solid; border-width:1px; height:152px; margin-right:5px; text-align:center;" >';
         alertsHTML += 'Change diameter</br></br>';
-        alertsHTML += '<div id="DiameterChangeControls" style="padding: 4px;">';
+        alertsHTML += '<div id="DiameterChangeControls" style="padding-top: 10px;">';
 
-        alertsHTML += '<table style="table-layout:fixed; height:84px; margin-left:auto;margin-right:auto;">';
-        alertsHTML += '<tr style="width:20px;height:28px;">';
-        alertsHTML += '<td align="center">';
+        alertsHTML += '<table style="table-layout:fixed; height:55px; margin-left:auto;margin-right:auto;">';
+        alertsHTML += '<tr style="width:20px;">';
+        alertsHTML += '<td align="center" style="margin-right:5px;">';
         alertsHTML += '<span id="diameterChangeDecreaseBtn" style="cursor:pointer;font-size:14px;border:thin outset black;padding:2px;">';//margin-left:23px;">';
         alertsHTML += '<i class="fa fa-minus"> </i>';
         alertsHTML += '<span id="diameterChangeDecreaseCaption" style="font-weight: bold;"></span>';
@@ -172,6 +172,36 @@ normal RA color:#4cc600
         alertsHTML += '</span>';
         alertsHTML += '</td>';
         alertsHTML += '</tr></table>';
+        alertsHTML += '</div></div>';
+
+        //***************** Bump nodes **********************
+        alertsHTML += '<div id="bumpNodes" style="padding: 4px; padding-top:11px; background-color:White; display:inline-block; border-style:solid; border-width:1px; height:152px; text-align:center;" >';
+        alertsHTML += 'Move nodes</br></br>';
+        alertsHTML += '<div id="MoveNodesControls" style="padding: 4px;">';
+
+        alertsHTML += '<div style="float:left;">A node';
+        alertsHTML += '<table style="table-layout:fixed; height:55px; margin-left:auto;margin-right:auto;">';
+        alertsHTML += '<tr style="width:20px;height:28px;">';
+        alertsHTML += '<td align="center">';
+        alertsHTML += '<span id="btnMoveANodeIn" style="cursor:pointer;font-size:14px;border:thin outset black;padding:2px; margin-right:2px;">In</span>';
+        alertsHTML += '</td>';
+
+        alertsHTML += '<td align="center">';
+        alertsHTML += '<span id="btnMoveANodeOut" style="cursor:pointer;font-size:14px;border:thin outset black;padding:2px;">Out</span>';
+        alertsHTML += '</td>';
+        alertsHTML += '</tr></table></div>';
+
+        alertsHTML += '<div style="float:right; margin-left:10px;">B node';
+        alertsHTML += '<table style="table-layout:fixed; height:55px; margin-left:auto;margin-right:auto;">';
+        alertsHTML += '<tr style="width:20px;height:28px;">';
+        alertsHTML += '<td align="center">';
+        alertsHTML += '<span id="btnMoveBNodeIn" style="cursor:pointer;font-size:14px;border:thin outset black;padding:2px; margin-right:2px;">In</span>';
+        alertsHTML += '</td>';
+
+        alertsHTML += '<td align="center">';
+        alertsHTML += '<span id="btnMoveBNodeOut" style="cursor:pointer;font-size:14px;border:thin outset black;padding:2px;">Out</span>';
+        alertsHTML += '</td>';
+        alertsHTML += '</tr></table></div>';
 
         alertsHTML += '</div></div>';
         alertsHTML += '</div><input type="checkbox" id="chkRARoundaboutAngles">Enable Roundabout Angles</div>'; //Close divWrapers & outer div
@@ -181,16 +211,21 @@ normal RA color:#4cc600
         RAUtilWindow.innerHTML = alertsHTML;
         document.body.appendChild(RAUtilWindow);
 
-        document.getElementById('RAShiftLeftBtn').addEventListener('click', RAShiftLeftBtnClick, false);
-        document.getElementById('RAShiftRightBtn').addEventListener('click', RAShiftRightBtnClick, false);
-        document.getElementById('RAShiftUpBtn').addEventListener('click', RAShiftUpBtnClick, false);
-        document.getElementById('RAShiftDownBtn').addEventListener('click', RAShiftDownBtnClick, false);
+        $('#RAShiftLeftBtn').click(RAShiftLeftBtnClick);
+        $('#RAShiftRightBtn').click(RAShiftRightBtnClick);
+        $('#RAShiftUpBtn').click(RAShiftUpBtnClick);
+        $('#RAShiftDownBtn').click(RAShiftDownBtnClick);
 
-        document.getElementById('RARotateLeftBtn').addEventListener('click', RARotateLeftBtnClick, false);
-        document.getElementById('RARotateRightBtn').addEventListener('click', RARotateRightBtnClick, false);
+        $('#RARotateLeftBtn').click(RARotateLeftBtnClick);
+        $('#RARotateRightBtn').click(RARotateRightBtnClick);
 
-        document.getElementById('diameterChangeDecreaseBtn').addEventListener('click', diameterChangeDecreaseBtnClick, false);
-        document.getElementById('diameterChangeIncreaseBtn').addEventListener('click', diameterChangeIncreaseBtnClick, false);
+        $('#diameterChangeDecreaseBtn').click(diameterChangeDecreaseBtnClick);
+        $('#diameterChangeIncreaseBtn').click(diameterChangeIncreaseBtnClick);
+
+        $('#btnMoveANodeIn').click(function(){moveNodeIn(WazeWrap.getSelectedFeatures()[0].model.attributes.id, WazeWrap.getSelectedFeatures()[0].model.attributes.fromNodeID);});
+        $('#btnMoveANodeOut').click(function(){moveNodeOut(WazeWrap.getSelectedFeatures()[0].model.attributes.id, WazeWrap.getSelectedFeatures()[0].model.attributes.fromNodeID);});
+        $('#btnMoveBNodeIn').click(function(){moveNodeIn(WazeWrap.getSelectedFeatures()[0].model.attributes.id, WazeWrap.getSelectedFeatures()[0].model.attributes.toNodeID);});
+        $('#btnMoveBNodeOut').click(function(){moveNodeOut(WazeWrap.getSelectedFeatures()[0].model.attributes.id, WazeWrap.getSelectedFeatures()[0].model.attributes.toNodeID);});
 
         $('#shiftAmount').keypress(function(event) {
             if ((event.which != 46 || $(this).val().indexOf('.') != -1) && (event.which < 48 || event.which > 57))
@@ -261,7 +296,7 @@ normal RA color:#4cc600
             DrawRoundaboutAngles();
         }
 
-        WazeWrap.Interface.ShowScriptUpdate("WME RA Util", GM_info.script.version, updateMessage, "https://greasyfork.org/en/scripts/23616-wme-ra-util", "https://www.waze.com/forum/viewtopic.php?f=819&t=215990");
+        WazeWrap.Interface.ShowScriptUpdate("WME RA Util", GM_info.script.version, updateMessage, "https://greasyfork.org/en/scripts/23616-wme-ra-util", "https://www.waze.com/forum/viewtopic.php?f=819&t=211079");
     }
 
     function saveSettingsToStorage() {
@@ -280,17 +315,6 @@ normal RA color:#4cc600
             localStorage.setItem("WME_RAUtil", JSON.stringify(settings));
         }
     }
-
-    /*
-    function undotriggered(){
-        checkSaveChanges();
-    }
-
-    function actionsCleared(){
-        //checkSaveChanges();
-        totalActions = 0;
-    }
-    */
 
     function checkDisplayTool(){
         if(WazeWrap.hasSelectedFeatures() && WazeWrap.getSelectedFeatures()[0].model.type === 'segment'){
@@ -320,29 +344,6 @@ normal RA color:#4cc600
                 });
         }
     }
-
-
-    //var pendingChanges = false;
-    /**
-    Returns false if there are pending changes, true if no changes need saved.
-    */
-    /*function checkSaveChanges(){
-        var $RASaveChanges = $('#RAUtilSaveChanges');
-        if(W.model.actionManager.index >= 0 && (totalActions === 0 && (W.model.actionManager.actions.length > 0))){
-            if($RASaveChanges.length === 0){
-                $RASaveChanges = $('<div>', {id:'RAUtilSaveChanges', style:'color:red'});
-                $RASaveChanges.text('You must save your changes before using this utility.');
-                $('#RAUtilWindow').append($RASaveChanges);
-                pendingChanges = true;
-            }
-        }
-        else
-        {
-            $RASaveChanges.remove();
-            pendingChanges = false;
-        }
-    }
-    */
 
     function checkAllEditable(RASegs){
         var $RAEditable = $('#RAEditable');
@@ -496,12 +497,8 @@ normal RA color:#4cc600
     }
 
     function rotatePoints(origin, points, angle){
-        //console.log("Origin: " + origin);
-        //console.log("Point: " + points[0]);
         var lineFeature = new OL.Feature.Vector(new OL.Geometry.LineString(points),null,null);
         lineFeature.geometry.rotate(angle, new OL.Geometry.Point(origin.lon, origin.lat));
-        //console.log(new OL.Geometry.Point(origin.lon, origin.lat).distanceTo(points[0]));
-        //console.log(lineFeature.geometry.components[0]);
         return [].concat(lineFeature.geometry.components);
     }
 
@@ -569,6 +566,19 @@ normal RA color:#4cc600
         }
     }
 
+    function RARotateLeftBtnClick(e){
+        e.stopPropagation();
+        var segObj = WazeWrap.getSelectedFeatures()[0];
+        RotateRA(segObj, $('#rotationAmount').val());
+    }
+
+    function RARotateRightBtnClick(e){
+        e.stopPropagation();
+
+        var segObj = WazeWrap.getSelectedFeatures()[0];
+        RotateRA(segObj, -$('#rotationAmount').val());
+    }
+
     function ChangeDiameter(segObj, amount){
         var RASegs = WazeWrap.Model.getAllRoundaboutSegmentsFromObj(segObj);
         var raCenter = W.model.junctions.objects[segObj.model.attributes.junctionID].geometry.coordinates;
@@ -633,18 +643,110 @@ normal RA color:#4cc600
         ChangeDiameter(segObj, 1);
     }
 
-    function RARotateLeftBtnClick(e){
-        e.stopPropagation();
-        var segObj = WazeWrap.getSelectedFeatures()[0];
-        RotateRA(segObj, $('#rotationAmount').val());
+    function moveNodeIn(sourceSegID, nodeID){
+        let isANode = true;
+        let curSeg = W.model.segments.getObjectById(sourceSegID);
+        if(curSeg.geometry.components.length > 2){
+            if(nodeID === curSeg.attributes.toNodeID)
+                isANode = false;
+            //Add geo point on the other segment
+            let node = W.model.nodes.getObjectById(nodeID);
+            let currNodePOS = node.geometry.clone();
+            let otherSeg; //other RA segment that we are adding a geo point to
+            let nodeSegs = [...W.model.nodes.getObjectById(nodeID).attributes.segIDs];
+            nodeSegs = _.without(nodeSegs, sourceSegID); //remove the source segment from the node Segs - we need to find the segment that is a part of the RA that is prior to our source seg
+            for(let i=0; i<nodeSegs.length; i++){
+                let s = W.model.segments.getObjectById(nodeSegs[i]);
+                if(s.attributes.junctionID){
+                    otherSeg = s;
+                    break;
+                }
+            }
+            let newGeo = otherSeg.geometry.clone();
+            let originalLength = otherSeg.geometry.components.length;
+
+            newGeo.components.splice((isANode ? -1 : 1),0, new OL.Geometry.Point(currNodePOS.x, currNodePOS.y));
+            newGeo.components[0].calculateBounds();
+            newGeo.components[originalLength].calculateBounds();
+
+            var multiaction = new MultiAction();
+            multiaction.setModel(W.model);
+            multiaction.doSubAction(new UpdateSegmentGeometry(otherSeg, otherSeg.geometry, newGeo));
+
+            //note and remove first geo point, move junction node to this point
+            var newNodeGeometry = curSeg.geometry.components[(isANode ? 1 : curSeg.geometry.components.length - 2)].clone();
+            newNodeGeometry.calculateBounds();
+
+            let newSegGeo = curSeg.geometry.clone();
+            newSegGeo.components.splice((isANode ? 1 : newSegGeo.components.length - 2),1);
+            //delete the geo point
+            multiaction.doSubAction(new UpdateSegmentGeometry(curSeg, curSeg.geometry, newSegGeo));
+
+            //move the node
+            var connectedSegObjs = {};
+            var emptyObj = {};
+            for(var j=0;j<node.attributes.segIDs.length;j++){
+                var segid = node.attributes.segIDs[j];
+                connectedSegObjs[segid] = W.model.segments.getObjectById(segid).geometry.clone();
+            }
+            multiaction.doSubAction(new MoveNode(node, node.geometry, newNodeGeometry,connectedSegObjs,emptyObj));
+            W.model.actionManager.add(multiaction);
+        }
     }
 
-    function RARotateRightBtnClick(e){
-        e.stopPropagation();
+    function moveNodeOut(sourceSegID, nodeID){
+        let isANode = true;
+        let curSeg = W.model.segments.getObjectById(sourceSegID);
+        if(nodeID === curSeg.attributes.toNodeID)
+            isANode = false;
+        //Add geo point on the other segment
+        let node = W.model.nodes.getObjectById(nodeID);
+        let currNodePOS = node.geometry.clone();
+        let otherSeg; //other RA segment that we are adding a geo point to
+        let nodeSegs = [...W.model.nodes.getObjectById(nodeID).attributes.segIDs];
+        nodeSegs = _.without(nodeSegs, sourceSegID); //remove the source segment from the node Segs - we need to find the segment that is a part of the RA that is after our source seg
+        for(let i=0; i<nodeSegs.length; i++){
+            let s = W.model.segments.getObjectById(nodeSegs[i]);
+            if(s.attributes.junctionID){
+                otherSeg = s;
+                break;
+            }
+        }
+        if(otherSeg.geometry.components.length > 2){
+            let origNodeSegs = [...W.model.nodes.getObjectById(nodeID).attributes.segIDs];
 
-        var segObj = WazeWrap.getSelectedFeatures()[0];
-        RotateRA(segObj, -$('#rotationAmount').val());
+            let newGeo = otherSeg.geometry.clone();
+            let originalLength = otherSeg.geometry.components.length;
+
+            //note and remove first geo point, move junction node to this point
+            var newNodeGeometry = otherSeg.geometry.components[(isANode ? otherSeg.geometry.components.length - 2 : 1)].clone();
+            newNodeGeometry.calculateBounds();
+
+            let newSegGeo = curSeg.geometry.clone();
+            newSegGeo.components.splice((isANode ? 1 : newSegGeo.components.length - 1),0, new OL.Geometry.Point(currNodePOS.x, currNodePOS.y));
+            //delete the geo point
+            var multiaction = new MultiAction();
+            multiaction.setModel(W.model);
+            multiaction.doSubAction(new UpdateSegmentGeometry(curSeg, curSeg.geometry, newSegGeo));
+
+            newGeo.components.splice((isANode ? -2 : 1),1);
+            newGeo.components[0].calculateBounds();
+            newGeo.components[originalLength-2].calculateBounds();
+
+            multiaction.doSubAction(new UpdateSegmentGeometry(otherSeg, otherSeg.geometry, newGeo));
+
+            //move the node
+            var connectedSegObjs = {};
+            var emptyObj = {};
+            for(var j=0; j < origNodeSegs.length;j++){
+                var segid = origNodeSegs[j];
+                connectedSegObjs[segid] = W.model.segments.getObjectById(segid).geometry.clone();
+            }
+            multiaction.doSubAction(new MoveNode(node, node.geometry, newNodeGeometry,connectedSegObjs,emptyObj));
+            W.model.actionManager.add(multiaction);
+        }
     }
+
 
     //Left
     function RAShiftLeftBtnClick(e){
