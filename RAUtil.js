@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         WME RA Util
 // @namespace    https://greasyfork.org/users/30701-justins83-waze
-// @version      2019.03.27.02
+// @version      2019.04.08.01
 // @description  Providing basic utility for RA adjustment without the need to delete & recreate
 // @include      https://www.waze.com/editor*
 // @include      https://www.waze.com/*/editor*
@@ -39,7 +39,7 @@ normal RA color:#4cc600
 
     //var totalActions = 0;
     var _settings;
-    const updateMessage = "Added the ability to shift the A & B nodes of a roundabout segment along the roundabout so it isn't necessary to disconnect and reconnect after adjusting the size/position and the node no longer lines up.  See the forum for more information.";
+    const updateMessage = "Shifting of nodes in RAs with differing A to B & B to A segments should now work correctly.";
 
     function bootstrap(tries = 1) {
 
@@ -627,7 +627,8 @@ normal RA color:#4cc600
                 }
                 W.model.actionManager.add(new MoveNode(node, node.geometry, newNodeGeometry, connectedSegObjs, emptyObj));
             }
-            DrawRoundaboutAngles();
+            if(_settings.RoundaboutAngles)
+                DrawRoundaboutAngles();
         }
     }
 
@@ -662,17 +663,9 @@ normal RA color:#4cc600
                     break;
                 }
             }
-            let newGeo = otherSeg.geometry.clone();
-            let originalLength = otherSeg.geometry.components.length;
-
-            newGeo.components.splice((isANode ? -1 : 1),0, new OL.Geometry.Point(currNodePOS.x, currNodePOS.y));
-            newGeo.components[0].calculateBounds();
-            newGeo.components[originalLength].calculateBounds();
 
             var multiaction = new MultiAction();
             multiaction.setModel(W.model);
-            multiaction.doSubAction(new UpdateSegmentGeometry(otherSeg, otherSeg.geometry, newGeo));
-
             //note and remove first geo point, move junction node to this point
             var newNodeGeometry = curSeg.geometry.components[(isANode ? 1 : curSeg.geometry.components.length - 2)].clone();
             newNodeGeometry.calculateBounds();
@@ -690,9 +683,24 @@ normal RA color:#4cc600
                 connectedSegObjs[segid] = W.model.segments.getObjectById(segid).geometry.clone();
             }
             multiaction.doSubAction(new MoveNode(node, node.geometry, newNodeGeometry,connectedSegObjs,emptyObj));
+
+            if((otherSeg.attributes.revDirection && !curSeg.attributes.revDirection) || (!otherSeg.attributes.revDirection && curSeg.attributes.revDirection))
+                    isANode = !isANode;
+
+            let newGeo = otherSeg.geometry.clone();
+            let originalLength = otherSeg.geometry.components.length;
+
+            newGeo.components.splice((isANode ? -1 : 1),0, new OL.Geometry.Point(currNodePOS.x, currNodePOS.y));
+            newGeo.components[0].calculateBounds();
+            newGeo.components[originalLength].calculateBounds();
+
+            multiaction.doSubAction(new UpdateSegmentGeometry(otherSeg, otherSeg.geometry, newGeo));
+
+
             W.model.actionManager.add(multiaction);
 
-            DrawRoundaboutAngles();
+            if(_settings.RoundaboutAngles)
+                DrawRoundaboutAngles();
         }
     }
 
@@ -716,13 +724,7 @@ normal RA color:#4cc600
         }
         if(otherSeg.geometry.components.length > 2){
             let origNodeSegs = [...W.model.nodes.getObjectById(nodeID).attributes.segIDs];
-
-            let newGeo = otherSeg.geometry.clone();
             let originalLength = otherSeg.geometry.components.length;
-
-            //note and remove first geo point, move junction node to this point
-            var newNodeGeometry = otherSeg.geometry.components[(isANode ? otherSeg.geometry.components.length - 2 : 1)].clone();
-            newNodeGeometry.calculateBounds();
 
             let newSegGeo = curSeg.geometry.clone();
             newSegGeo.components.splice((isANode ? 1 : newSegGeo.components.length - 1),0, new OL.Geometry.Point(currNodePOS.x, currNodePOS.y));
@@ -730,7 +732,13 @@ normal RA color:#4cc600
             var multiaction = new MultiAction();
             multiaction.setModel(W.model);
             multiaction.doSubAction(new UpdateSegmentGeometry(curSeg, curSeg.geometry, newSegGeo));
+            if((otherSeg.attributes.revDirection && !curSeg.attributes.revDirection) || (!otherSeg.attributes.revDirection && curSeg.attributes.revDirection))
+                isANode = !isANode;
 
+            //note and remove first geo point, move junction node to this point
+            var newNodeGeometry = otherSeg.geometry.components[(isANode ? otherSeg.geometry.components.length - 2 : 1)].clone();
+            newNodeGeometry.calculateBounds();
+            let newGeo = otherSeg.geometry.clone();
             newGeo.components.splice((isANode ? -2 : 1),1);
             newGeo.components[0].calculateBounds();
             newGeo.components[originalLength-2].calculateBounds();
@@ -747,7 +755,8 @@ normal RA color:#4cc600
             multiaction.doSubAction(new MoveNode(node, node.geometry, newNodeGeometry,connectedSegObjs,emptyObj));
             W.model.actionManager.add(multiaction);
 
-            DrawRoundaboutAngles();
+            if(_settings.RoundaboutAngles)
+                DrawRoundaboutAngles();
         }
     }
 
