@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         WME RA Util
 // @namespace    https://greasyfork.org/users/30701-justins83-waze
-// @version      2019.04.08.01
+// @version      2019.05.03.01
 // @description  Providing basic utility for RA adjustment without the need to delete & recreate
 // @include      https://www.waze.com/editor*
 // @include      https://www.waze.com/*/editor*
@@ -39,7 +39,7 @@ normal RA color:#4cc600
 
     //var totalActions = 0;
     var _settings;
-    const updateMessage = "Shifting of nodes in RAs with differing A to B & B to A segments should now work correctly.";
+    const updateMessage = "";
 
     function bootstrap(tries = 1) {
 
