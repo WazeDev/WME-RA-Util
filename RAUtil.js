@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         WME RA Util
 // @namespace    https://greasyfork.org/users/30701-justins83-waze
-// @version      2019.05.03.01
+// @version      2019.10.29.01
 // @description  Providing basic utility for RA adjustment without the need to delete & recreate
 // @include      https://www.waze.com/editor*
 // @include      https://www.waze.com/*/editor*
@@ -36,6 +36,7 @@ normal RA color:#4cc600
     var UpdateSegmentGeometry;
     var MoveNode, MultiAction;
     var drc_layer;
+	let wEvents;
 
     //var totalActions = 0;
     var _settings;
@@ -58,6 +59,11 @@ normal RA color:#4cc600
         UpdateSegmentGeometry = require('Waze/Action/UpdateSegmentGeometry');
         MoveNode = require("Waze/Action/MoveNode");
         MultiAction = require("Waze/Action/MultiAction");
+        
+        if(W.map.events)
+		    wEvents = W.map.events;
+	    else
+		    wEvents = W.map.getMapEventsListener();
 
         RAUtilWindow = document.createElement('div');
         RAUtilWindow.id = "RAUtilWindow";
@@ -278,21 +284,21 @@ normal RA color:#4cc600
             saveSettingsToStorage();
 
             if($("#chkRARoundaboutAngles").is(":checked")){
-                W.map.events.register("zoomend", null, DrawRoundaboutAngles);
-                W.map.events.register("moveend", null, DrawRoundaboutAngles);
+                wEvents.register("zoomend", null, DrawRoundaboutAngles);
+                wEvents.register("moveend", null, DrawRoundaboutAngles);
                 DrawRoundaboutAngles();
                 drc_layer.setVisibility(true);
             }
             else{
-                W.map.events.unregister("zoomend", null, DrawRoundaboutAngles);
-                W.map.events.unregister("moveend", null, DrawRoundaboutAngles);
+                wEvents.unregister("zoomend", null, DrawRoundaboutAngles);
+                wEvents.unregister("moveend", null, DrawRoundaboutAngles);
                 drc_layer.setVisibility(false);
             }
         });
 
         if(_settings.RoundaboutAngles){
-            W.map.events.register("zoomend", null, DrawRoundaboutAngles);
-            W.map.events.register("moveend", null, DrawRoundaboutAngles);
+            wEvents.register("zoomend", null, DrawRoundaboutAngles);
+            wEvents.register("moveend", null, DrawRoundaboutAngles);
             DrawRoundaboutAngles();
         }
 
