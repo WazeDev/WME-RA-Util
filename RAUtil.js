@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         WME RA Util
 // @namespace    https://greasyfork.org/users/30701-justins83-waze
-// @version      2019.10.29.01
+// @version      2019.11.20.01
 // @description  Providing basic utility for RA adjustment without the need to delete & recreate
 // @include      https://www.waze.com/editor*
 // @include      https://www.waze.com/*/editor*
@@ -40,7 +40,7 @@ normal RA color:#4cc600
 
     //var totalActions = 0;
     var _settings;
-    const updateMessage = "";
+    const updateMessage = "Tweaks for WME update";
 
     function bootstrap(tries = 1) {
 
@@ -916,7 +916,7 @@ normal RA color:#4cc600
                 if (junction_coords && junction_coords.length == 2) {
                     //---------- get center point from junction model
                     let lonlat = new OL.LonLat(junction_coords[0], junction_coords[1]);
-                    lonlat.transform(W.map.displayProjection, W.map.projection);
+                    lonlat.transform(W.map.displayProjection, W.map.getProjectionObject());
                     let pt = new OL.Geometry.Point(lonlat.lon, lonlat.lat);
                     sr_x = pt.x;
                     sr_y = pt.y;
@@ -1078,7 +1078,7 @@ normal RA color:#4cc600
                 let p1 = new OL.Geometry.Point( nodes_x[r_ix], nodes_y[r_ix] );
                 let p2 = new OL.Geometry.Point( sr_x, sr_y );
                 let line = new OL.Geometry.LineString([p1, p2]);
-                let geo_radius = line.getGeodesicLength(W.map.projection);
+                let geo_radius = line.getGeodesicLength(W.map.getProjectionObject());
 
                 let diam = geo_radius * 2.0;
                 let pt = new OL.Geometry.Point(sr_x, sr_y);
