@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         WME RA Util
 // @namespace    https://greasyfork.org/users/30701-justins83-waze
-// @version      2019.11.20.01
+// @version      2019.12.16.01
 // @description  Providing basic utility for RA adjustment without the need to delete & recreate
 // @include      https://www.waze.com/editor*
 // @include      https://www.waze.com/*/editor*
@@ -857,7 +857,7 @@ normal RA color:#4cc600
             return;
         }
 
-        if (W.map.zoom < 1) {
+        if (W.map.getZoom() < 1) {
             drc_layer.removeAllFeatures();
             return;
         }
@@ -982,12 +982,12 @@ normal RA color:#4cc600
                 var drc_color = (numNodes <= 4) ? "#0040FF" : "#002080";
 
                 var drc_point = new OL.Geometry.Point(sr_x, sr_y );
-                var drc_circle = new OL.Geometry.Polygon.createRegularPolygon( drc_point, radius, 10 * W.map.zoom );
+                var drc_circle = new OL.Geometry.Polygon.createRegularPolygon( drc_point, radius, 10 * W.map.getZoom() );
                 var drc_feature = new OL.Feature.Vector(drc_circle, {labelText: "", labelColor: "#000000", strokeColor: drc_color, });
                 drc_features.push(drc_feature);
 
 
-                if (numNodes >= 2 && numNodes <= 4 && W.map.zoom >= 5) {
+                if (numNodes >= 2 && numNodes <= 4 && W.map.getZoom() >= 5) {
                     for(let i=0; i<nodes_x.length; i++) {
                         let ix = nodes_x[i];
                         let iy = nodes_y[i];
