@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         WME RA Util
 // @namespace    https://greasyfork.org/users/30701-justins83-waze
-// @version      2019.12.16.01
+// @version      2020.05.22.01
 // @description  Providing basic utility for RA adjustment without the need to delete & recreate
 // @include      https://www.waze.com/editor*
 // @include      https://www.waze.com/*/editor*
@@ -16,7 +16,7 @@
 
 /* global W */
 /* global WazeWrap */
-/* global OL */
+/* global OpenLayers */
 /* global require */
 /* global $ */
 /* global _ */
@@ -423,7 +423,7 @@ normal RA color:#4cc600
                 for(j=1; j < originalLength-1; j++){
                     gps = WazeWrap.Geometry.ConvertTo4326(segObj.geometry.components[j].x, segObj.geometry.components[j].y);
                     gps.lat += latOffset;
-                    newGeometry.components.splice(j,0, new OL.Geometry.Point(segObj.geometry.components[j].x, WazeWrap.Geometry.ConvertTo900913(segObj.geometry.components[j].x,gps.lat).lat));
+                    newGeometry.components.splice(j,0, new OpenLayers.Geometry.Point(segObj.geometry.components[j].x, WazeWrap.Geometry.ConvertTo900913(segObj.geometry.components[j].x,gps.lat).lat));
                     newGeometry.components.splice(j+1,1);
                 }
                 newGeometry.components[0].calculateBounds();
@@ -470,7 +470,7 @@ normal RA color:#4cc600
                 for(let j=1; j < originalLength-1; j++){
                     gps = WazeWrap.Geometry.ConvertTo4326(segObj.geometry.components[j].x, segObj.geometry.components[j].y);
                     gps.lon += longOffset;
-                    newGeometry.components.splice(j,0, new OL.Geometry.Point(WazeWrap.Geometry.ConvertTo900913(gps.lon, segObj.geometry.components[j].y).lon, segObj.geometry.components[j].y));
+                    newGeometry.components.splice(j,0, new OpenLayers.Geometry.Point(WazeWrap.Geometry.ConvertTo900913(gps.lon, segObj.geometry.components[j].y).lon, segObj.geometry.components[j].y));
                     newGeometry.components.splice(j+1,1);
                 }
                 newGeometry.components[0].calculateBounds();
@@ -503,8 +503,8 @@ normal RA color:#4cc600
     }
 
     function rotatePoints(origin, points, angle){
-        var lineFeature = new OL.Feature.Vector(new OL.Geometry.LineString(points),null,null);
-        lineFeature.geometry.rotate(angle, new OL.Geometry.Point(origin.lon, origin.lat));
+        var lineFeature = new OpenLayers.Feature.Vector(new OpenLayers.Geometry.LineString(points),null,null);
+        lineFeature.geometry.rotate(angle, new OpenLayers.Geometry.Point(origin.lon, origin.lat));
         return [].concat(lineFeature.geometry.components);
     }
 
@@ -527,12 +527,12 @@ normal RA color:#4cc600
                 var segPoints = [];
                 //Have to copy the points manually (can't use .clone()) otherwise the geometry rotation modifies the geometry of the segment itself and that hoses WME.
                 for(let j=0; j<originalLength;j++)
-                    segPoints.push(new OL.Geometry.Point(segObj.geometry.components[j].x, segObj.geometry.components[j].y));
+                    segPoints.push(new OpenLayers.Geometry.Point(segObj.geometry.components[j].x, segObj.geometry.components[j].y));
 
                 var newPoints = rotatePoints(center, segPoints, angle);
 
                 for(let j=1; j<originalLength-1;j++){
-                    newGeometry.components.splice(j, 0, new OL.Geometry.Point(newPoints[j].x, newPoints[j].y));
+                    newGeometry.components.splice(j, 0, new OpenLayers.Geometry.Point(newPoints[j].x, newPoints[j].y));
                     newGeometry.components.splice(j+1,1);
                 }
 
@@ -549,8 +549,8 @@ normal RA color:#4cc600
                 var nodePoints = [];
                 var newNodeGeometry = node.geometry.clone();
 
-                nodePoints.push(new OL.Geometry.Point(node.attributes.geometry.x, node.attributes.geometry.y));
-                nodePoints.push(new OL.Geometry.Point(node.attributes.geometry.x, node.attributes.geometry.y)); //add it twice because lines need 2 points
+                nodePoints.push(new OpenLayers.Geometry.Point(node.attributes.geometry.x, node.attributes.geometry.y));
+                nodePoints.push(new OpenLayers.Geometry.Point(node.attributes.geometry.x, node.attributes.geometry.y)); //add it twice because lines need 2 points
 
                 gps = rotatePoints(center, nodePoints, angle);
 
@@ -606,7 +606,7 @@ normal RA color:#4cc600
                     let xdelta = (pt.x - center.lon) * ratio;
                     let ydelta = (pt.y - center.lat) * ratio;
 
-                    newGeometry.components.splice(j,0, new OL.Geometry.Point(center.lon + xdelta, center.lat + ydelta));
+                    newGeometry.components.splice(j,0, new OpenLayers.Geometry.Point(center.lon + xdelta, center.lat + ydelta));
                     newGeometry.components.splice(j+1,1);
                 }
                 newGeometry.components[0].calculateBounds();
@@ -696,7 +696,7 @@ normal RA color:#4cc600
             let newGeo = otherSeg.geometry.clone();
             let originalLength = otherSeg.geometry.components.length;
 
-            newGeo.components.splice((isANode ? -1 : 1),0, new OL.Geometry.Point(currNodePOS.x, currNodePOS.y));
+            newGeo.components.splice((isANode ? -1 : 1),0, new OpenLayers.Geometry.Point(currNodePOS.x, currNodePOS.y));
             newGeo.components[0].calculateBounds();
             newGeo.components[originalLength].calculateBounds();
 
@@ -733,7 +733,7 @@ normal RA color:#4cc600
             let originalLength = otherSeg.geometry.components.length;
 
             let newSegGeo = curSeg.geometry.clone();
-            newSegGeo.components.splice((isANode ? 1 : newSegGeo.components.length - 1),0, new OL.Geometry.Point(currNodePOS.x, currNodePOS.y));
+            newSegGeo.components.splice((isANode ? 1 : newSegGeo.components.length - 1),0, new OpenLayers.Geometry.Point(currNodePOS.x, currNodePOS.y));
             //delete the geo point
             var multiaction = new MultiAction();
             multiaction.setModel(W.model);
@@ -822,7 +822,7 @@ normal RA color:#4cc600
         if(layers.length > 0)
             drc_layer = layers[0];
         else {
-            var drc_style = new OL.Style({
+            var drc_style = new OpenLayers.Style({
                 fillOpacity: 0.0,
                 strokeOpacity: 1.0,
                 fillColor: "#FF40C0",
@@ -838,10 +838,10 @@ normal RA color:#4cc600
                 fontSize: "10px"
             });
 
-            drc_layer = new OL.Layer.Vector("Roundabout Angles", {
+            drc_layer = new OpenLayers.Layer.Vector("Roundabout Angles", {
                 displayInLayerSwitcher: true,
                 uniqueName: "__DrawRoundaboutAngles",
-                styleMap: new OL.StyleMap(drc_style)
+                styleMap: new OpenLayers.StyleMap(drc_style)
             });
 
             I18n.translations[I18n.currentLocale()].layers.name["__DrawRoundaboutAngles"] = "Roundabout Angles";
@@ -915,9 +915,9 @@ normal RA color:#4cc600
 
                 if (junction_coords && junction_coords.length == 2) {
                     //---------- get center point from junction model
-                    let lonlat = new OL.LonLat(junction_coords[0], junction_coords[1]);
+                    let lonlat = new OpenLayers.LonLat(junction_coords[0], junction_coords[1]);
                     lonlat.transform(W.map.displayProjection, W.map.getProjectionObject());
-                    let pt = new OL.Geometry.Point(lonlat.lon, lonlat.lat);
+                    let pt = new OpenLayers.Geometry.Point(lonlat.lon, lonlat.lat);
                     sr_x = pt.x;
                     sr_y = pt.y;
                 }
@@ -941,7 +941,7 @@ normal RA color:#4cc600
                 }
                 else {
                     //---------- simple bounds-based calculation of center point
-                    var rbounds = new OL.Bounds();
+                    var rbounds = new OpenLayers.Bounds();
                     rbounds.extend(isegment.geometry.bounds);
                     rbounds.extend(jsegment.geometry.bounds);
 
@@ -981,9 +981,9 @@ normal RA color:#4cc600
 
                 var drc_color = (numNodes <= 4) ? "#0040FF" : "#002080";
 
-                var drc_point = new OL.Geometry.Point(sr_x, sr_y );
-                var drc_circle = new OL.Geometry.Polygon.createRegularPolygon( drc_point, radius, 10 * W.map.getZoom() );
-                var drc_feature = new OL.Feature.Vector(drc_circle, {labelText: "", labelColor: "#000000", strokeColor: drc_color, });
+                var drc_point = new OpenLayers.Geometry.Point(sr_x, sr_y );
+                var drc_circle = new OpenLayers.Geometry.Polygon.createRegularPolygon( drc_point, radius, 10 * W.map.getZoom() );
+                var drc_feature = new OpenLayers.Feature.Vector(drc_circle, {labelText: "", labelColor: "#000000", strokeColor: drc_color, });
                 drc_features.push(drc_feature);
 
 
@@ -991,11 +991,11 @@ normal RA color:#4cc600
                     for(let i=0; i<nodes_x.length; i++) {
                         let ix = nodes_x[i];
                         let iy = nodes_y[i];
-                        let startPt   = new OL.Geometry.Point( sr_x, sr_y );
-                        let endPt     = new OL.Geometry.Point( ix, iy );
-                        let line      = new OL.Geometry.LineString([startPt, endPt]);
+                        let startPt   = new OpenLayers.Geometry.Point( sr_x, sr_y );
+                        let endPt     = new OpenLayers.Geometry.Point( ix, iy );
+                        let line      = new OpenLayers.Geometry.LineString([startPt, endPt]);
                         let style     = {strokeColor:drc_color, strokeWidth:2};
-                        let fea       = new OL.Feature.Vector(line, {}, style);
+                        let fea       = new OpenLayers.Feature.Vector(line, {}, style);
                         drc_features.push(fea);
                     }
 
@@ -1057,32 +1057,32 @@ normal RA color:#4cc600
                         if (angint <= -15 || angint >= 15) kolor = "#FF0000";
                         else if (angint <= -13 || angint >= 13) kolor = "#FFC000";
 
-                        let pt = new OL.Geometry.Point(ex, ey);
-                        drc_features.push(new OL.Feature.Vector( pt, {labelText: (angint + "°"), labelColor: kolor } ));
-                        //drc_features.push(new OL.Feature.Vector( pt, {labelText: (+angles_float[i].toFixed(2) + "°"), labelColor: kolor } ));
+                        let pt = new OpenLayers.Geometry.Point(ex, ey);
+                        drc_features.push(new OpenLayers.Feature.Vector( pt, {labelText: (angint + "°"), labelColor: kolor } ));
+                        //drc_features.push(new OpenLayers.Feature.Vector( pt, {labelText: (+angles_float[i].toFixed(2) + "°"), labelColor: kolor } ));
                     }
                 }
                 else {
                     for(let i=0; i < nodes_x.length; i++) {
                         let ix = nodes_x[i];
                         let iy = nodes_y[i];
-                        let startPt = new OL.Geometry.Point( sr_x, sr_y );
-                        let endPt = new OL.Geometry.Point( ix, iy );
-                        let line = new OL.Geometry.LineString([startPt, endPt]);
+                        let startPt = new OpenLayers.Geometry.Point( sr_x, sr_y );
+                        let endPt = new OpenLayers.Geometry.Point( ix, iy );
+                        let line = new OpenLayers.Geometry.LineString([startPt, endPt]);
                         let style = {strokeColor:drc_color, strokeWidth:2};
-                        let fea = new OL.Feature.Vector(line, {}, style);
+                        let fea = new OpenLayers.Feature.Vector(line, {}, style);
                         drc_features.push(fea);
                     }
                 }
 
-                let p1 = new OL.Geometry.Point( nodes_x[r_ix], nodes_y[r_ix] );
-                let p2 = new OL.Geometry.Point( sr_x, sr_y );
-                let line = new OL.Geometry.LineString([p1, p2]);
+                let p1 = new OpenLayers.Geometry.Point( nodes_x[r_ix], nodes_y[r_ix] );
+                let p2 = new OpenLayers.Geometry.Point( sr_x, sr_y );
+                let line = new OpenLayers.Geometry.LineString([p1, p2]);
                 let geo_radius = line.getGeodesicLength(W.map.getProjectionObject());
 
                 let diam = geo_radius * 2.0;
-                let pt = new OL.Geometry.Point(sr_x, sr_y);
-                drc_features.push(new OL.Feature.Vector( pt, {labelText: (diam.toFixed(0) + "m"), labelColor: "#000000" } ));
+                let pt = new OpenLayers.Geometry.Point(sr_x, sr_y);
+                drc_features.push(new OpenLayers.Feature.Vector( pt, {labelText: (diam.toFixed(0) + "m"), labelColor: "#000000" } ));
 
             }
 
