@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         WME RA Util
 // @namespace    https://greasyfork.org/users/30701-justins83-waze
-// @version      2020.05.22.01
+// @version      2020.06.30.01
 // @description  Providing basic utility for RA adjustment without the need to delete & recreate
 // @include      https://www.waze.com/editor*
 // @include      https://www.waze.com/*/editor*
@@ -24,9 +24,6 @@
 /* eslint curly: ["warn", "multi-or-nest"] */
 
 /*
-Todo:
--diameter change
-
 non-normal RA color:#FF8000
 normal RA color:#4cc600
 */
@@ -40,26 +37,27 @@ normal RA color:#4cc600
 
     //var totalActions = 0;
     var _settings;
-    const updateMessage = "Tweaks for WME update";
+    const updateMessage = "Beautiful new UI thanks to JanKlaaseen!";
 
     function bootstrap(tries = 1) {
 
-        if (window.W && window.W.map &&
-            window.W.model && window.require &&
+        if (W && W.map &&
+            W.model && require &&
             WazeWrap.Ready)
             init();
         else if (tries < 1000)
-            setTimeout(function () {bootstrap(tries++);}, 200);
+            setTimeout(function () {bootstrap(++tries);}, 200);
     }
 
     bootstrap();
 
 
     function init(){
+        injectCss();
         UpdateSegmentGeometry = require('Waze/Action/UpdateSegmentGeometry');
         MoveNode = require("Waze/Action/MoveNode");
         MultiAction = require("Waze/Action/MultiAction");
-        
+
         if(W.map.events)
 		    wEvents = W.map.events;
 	    else
@@ -71,146 +69,107 @@ normal RA color:#4cc600
         RAUtilWindow.style.visibility = 'hidden';
         RAUtilWindow.style.top = '15%';
         RAUtilWindow.style.left = '25%';
-        RAUtilWindow.style.width = '480px';
+        RAUtilWindow.style.width = '510px';
         RAUtilWindow.style.zIndex = 100;
-        RAUtilWindow.style.backgroundColor = '#BEDCE5';
-        RAUtilWindow.style.borderWidth = '3px';
+        RAUtilWindow.style.backgroundColor = '#FFFFFE';
+        RAUtilWindow.style.borderWidth = '0px';
         RAUtilWindow.style.borderStyle = 'solid';
         RAUtilWindow.style.borderRadius = '10px';
         RAUtilWindow.style.boxShadow = '5px 5px 10px Silver';
         RAUtilWindow.style.padding = '4px';
 
-        var alertsHTML = '<div id="header" style="padding: 4px; background-color:#4cc600; font-weight: bold; text-align:center;">Roundabout Utility <a data-toggle="collapse" href="#divWrappers" id="collapserLink" style="float:right"><span id="collapser" style="cursor:pointer;border:thin outset black;padding:2px;" class="fa fa-caret-square-o-up"></a></span></div>';
-        alertsHTML += '<div id="divWrappers" class="collapse in">';
-        alertsHTML += '<div id="contentShift" style="padding: 4px; background-color:White; display:inline-block; border-style:solid; border-width:1px; margin-right:5px;">';
-        alertsHTML += 'Shift amount</br><input type="text" name="shiftAmount" id="shiftAmount" size="1" style="border: 1px solid #000000" value="1"/> meter(s)&nbsp;';
-
-        alertsHTML += '<div id="controls" style="padding: 4px;">';
-
-        alertsHTML += '<table style="table-layout:fixed; width:60px; height:84px; margin-left:auto;margin-right:auto;">';
-        alertsHTML += '<tr style="width:20px;height:28px;">';
-        alertsHTML += '<td align="center"></td>';
-        alertsHTML += '<td align="center">';
-        //Single Shift Buttons
-        alertsHTML += '<span id="RAShiftUpBtn" style="cursor:pointer;font-size:14px;border:thin outset black;padding:2px;">';//margin-left:23px;">';
-        alertsHTML += '<i class="fa fa-angle-up"> </i>';
-        alertsHTML += '<span id="UpBtnCaption" style="font-weight: bold;"></span>';
-        alertsHTML += '</span>';
-        alertsHTML += '</td>';
-        alertsHTML += '<td align="center"></td>';
-        alertsHTML += '</tr>';
-
-        alertsHTML += '<tr style="width:20px;height:28px;">';
-        alertsHTML += '<td align="center">';
-        alertsHTML += '<span id="RAShiftLeftBtn" style="cursor:pointer;font-size:14px;border:thin outset black;padding:2px;padding-right:4px;">';//position:relative;padding:2px;padding-left:3px;padding-right:3px;margin-left:0px;top:10px;">';
-        alertsHTML += '<i class="fa fa-angle-left"> </i>';
-        alertsHTML += '<span id="LeftBtnCaption" style="font-weight: bold;"></span>';
-        alertsHTML += '</span>';
-        alertsHTML += '</td>';
-
-        alertsHTML += '<td align="center"></td>';
-
-        alertsHTML += '<td align="center">';
-        alertsHTML += '<span id="RAShiftRightBtn" style="cursor:pointer;font-size:14px;border:thin outset black;padding:2px;padding-left:4px;">';//position:relative;padding:2px;padding-left:3px;padding-right:3px;top:10px;margin-left:15px;">';
-        alertsHTML += '<i class="fa fa-angle-right"> </i>';
-        alertsHTML += '<span id="RightBtnCaption" style="font-weight: bold;"></span>';
-        alertsHTML += '</span>';
-        alertsHTML += '</td>';
-        alertsHTML += '</tr>';
-
-        alertsHTML += '<tr style="width:20px;height:28px;">';
-        alertsHTML += '<td align="center"></td>';
-
-        alertsHTML += '<td align="center">';
-        alertsHTML += '<span id="RAShiftDownBtn" style="cursor:pointer;font-size:14px;border:thin outset black;padding:2px;">';//;position:relative;top:20px;margin-left:17px;">';
-        alertsHTML += '<i class="fa fa-angle-down"> </i>';
-        alertsHTML += '<span id="DownBtnCaption" style="font-weight: bold;"></span>';
-        alertsHTML += '</span>';
-        alertsHTML += '</td>';
-
-        alertsHTML += '<td align="center"></td>';
-        alertsHTML += '</tr>';
-        alertsHTML += '</table>';
-        alertsHTML += '</div></div>';
-
-
-        //***************** Rotation **************************
-        alertsHTML += '<div id="contentRotate" style="padding: 4px; background-color:White;  display:inline-block; border-style:solid; border-width:1px; height:152px;  margin-right:5px;">';
-        alertsHTML += 'Rotation amount</br><input type="text" name="rotationAmount" id="rotationAmount" size="1" style="border: 1px solid #000000" value="1"/> degree(s)&nbsp;';
-        alertsHTML += '<div id="rotationControls" style="padding: 4px;">';
-        alertsHTML += '<table style="table-layout:fixed; width:60px; height:55px; margin-left:auto; margin-right:auto;">';
-        alertsHTML += '<tr style="width:20px;height:28px;">';
-        alertsHTML += '<td align="center">';
-        alertsHTML += '<span id="RARotateLeftBtn" style="cursor:pointer;font-size:14px;border:thin outset black;padding:2px;">';//margin-left:23px;">';
-        alertsHTML += '<i class="fa fa-undo"> </i>';
-        alertsHTML += '<span id="RotateLeftBtnCaption" style="font-weight: bold;"></span>';
-        alertsHTML += '</span>';
-        alertsHTML += '</td>';
-
-        alertsHTML += '<td align="center">';
-        alertsHTML += '<span id="RARotateRightBtn" style="cursor:pointer;font-size:14px;border:thin outset black;padding:2px;">';//margin-left:23px;">';
-        alertsHTML += '<i class="fa fa-repeat"> </i>';
-        alertsHTML += '<span id="RotateRightBtnCaption" style="font-weight: bold;"></span>';
-        alertsHTML += '</span>';
-        alertsHTML += '</td>';
-        alertsHTML += '</tr></table>';
-        alertsHTML += '</div></div>';
-
-        //********************* Diameter change ******************
-
-        alertsHTML += '<div id="diameterChange" style="padding: 4px; padding-top:11px; background-color:White; display:inline-block; border-style:solid; border-width:1px; height:152px; margin-right:5px; text-align:center;" >';
-        alertsHTML += 'Change diameter</br></br>';
-        alertsHTML += '<div id="DiameterChangeControls" style="padding-top: 10px;">';
-
-        alertsHTML += '<table style="table-layout:fixed; height:55px; margin-left:auto;margin-right:auto;">';
-        alertsHTML += '<tr style="width:20px;">';
-        alertsHTML += '<td align="center" style="margin-right:5px;">';
-        alertsHTML += '<span id="diameterChangeDecreaseBtn" style="cursor:pointer;font-size:14px;border:thin outset black;padding:2px;">';//margin-left:23px;">';
-        alertsHTML += '<i class="fa fa-minus"> </i>';
-        alertsHTML += '<span id="diameterChangeDecreaseCaption" style="font-weight: bold;"></span>';
-        alertsHTML += '</span>';
-        alertsHTML += '</td>';
-
-        alertsHTML += '<td align="center">';
-        alertsHTML += '<span id="diameterChangeIncreaseBtn" style="cursor:pointer;font-size:14px;border:thin outset black;padding:2px;">';//margin-left:23px;">';
-        alertsHTML += '<i class="fa fa-plus"> </i>';
-        alertsHTML += '<span id="diameterChangeIncreaseCaption" style="font-weight: bold;"></span>';
-        alertsHTML += '</span>';
-        alertsHTML += '</td>';
-        alertsHTML += '</tr></table>';
-        alertsHTML += '</div></div>';
-
-        //***************** Bump nodes **********************
-        alertsHTML += '<div id="bumpNodes" style="padding: 4px; padding-top:11px; background-color:White; display:inline-block; border-style:solid; border-width:1px; height:152px; text-align:center;" >';
-        alertsHTML += 'Move nodes</br></br>';
-        alertsHTML += '<div id="MoveNodesControls" style="padding: 4px;">';
-
-        alertsHTML += '<div style="float:left;">A node';
-        alertsHTML += '<table style="table-layout:fixed; height:55px; margin-left:auto;margin-right:auto;">';
-        alertsHTML += '<tr style="width:20px;height:28px;">';
-        alertsHTML += '<td align="center">';
-        alertsHTML += '<span id="btnMoveANodeIn" style="cursor:pointer;font-size:14px;border:thin outset black;padding:2px; margin-right:2px;">In</span>';
-        alertsHTML += '</td>';
-
-        alertsHTML += '<td align="center">';
-        alertsHTML += '<span id="btnMoveANodeOut" style="cursor:pointer;font-size:14px;border:thin outset black;padding:2px;">Out</span>';
-        alertsHTML += '</td>';
-        alertsHTML += '</tr></table></div>';
-
-        alertsHTML += '<div style="float:right; margin-left:10px;">B node';
-        alertsHTML += '<table style="table-layout:fixed; height:55px; margin-left:auto;margin-right:auto;">';
-        alertsHTML += '<tr style="width:20px;height:28px;">';
-        alertsHTML += '<td align="center">';
-        alertsHTML += '<span id="btnMoveBNodeIn" style="cursor:pointer;font-size:14px;border:thin outset black;padding:2px; margin-right:2px;">In</span>';
-        alertsHTML += '</td>';
-
-        alertsHTML += '<td align="center">';
-        alertsHTML += '<span id="btnMoveBNodeOut" style="cursor:pointer;font-size:14px;border:thin outset black;padding:2px;">Out</span>';
-        alertsHTML += '</td>';
-        alertsHTML += '</tr></table></div>';
-
-        alertsHTML += '</div></div>';
-        alertsHTML += '</div><input type="checkbox" id="chkRARoundaboutAngles">Enable Roundabout Angles</div>'; //Close divWrapers & outer div
+        var alertsHTML = '<div id="header" style="padding: 4px; background-color:#92C3D3; border-radius: 5px;-moz-border-radius: 5px;-webkit-border-radius: 5px; color: white; font-weight: bold; text-align:center; letter-spacing: 1px;text-shadow: black 0.1em 0.1em 0.2em;"><img src="https://storage.googleapis.com/wazeopedia-files/1/1e/RA_Util.png" style="float:left"></img> Roundabout Utility <a data-toggle="collapse" href="#divWrappers" id="collapserLink" style="float:right"><span id="collapser" style="cursor:pointer;padding:2px;color:white;" class="fa fa-angle-up"></a></span></div>';
+        // start collapse // I put it al the beginning
+      alertsHTML += '<div id="divWrappers" class="collapse in">';
+         //***************** Round About Angles **************************
+         alertsHTML += '<p style="margin: 10px 0px 0px 20px;"><input type="checkbox" id="chkRARoundaboutAngles">&nbsp;Enable Roundabout Angles</p>';
+         //***************** Shift Amount **************************
+         // Define BOX
+         alertsHTML += '<div id="contentShift" style="text-align:center;float:left; width: 120px;max-width: 24%;height: 170px;margin: 1em 5px 0px 0px;opacity:1;border-radius: 2px;-moz-border-radius: 2px;-webkit-border-radius: 4px;border-width:1px;border-style:solid;border-color:#92C3D3;padding:2px;}">';
+         alertsHTML += '<b>Shift amount</b></br><input type="text" name="shiftAmount" id="shiftAmount" size="1" style="float: left; text-align: center;font: inherit; line-height: normal; width: 30px; height: 20px; margin: 5px 4px; box-sizing: border-box; display: block; padding-left: 0; border-bottom-color: rgba(black,.3); background: transparent; outline: none; color: black;" value="1"/> <div style="margin: 5px 4px;">Meter(s)';
+            // Shift amount controls
+            alertsHTML += '<div id="controls" style="text-align:center; padding:06px 4px;width=100px; height=100px;margin: 5px 0px;border-style:solid; border-width: 2px;border-radius: 50%;-moz-border-radius: 50%;-webkit-border-radius: 50%;box-shadow: inset 0px 0px 50px -14px rgba(0,0,0,1);-moz-box-shadow: inset 0px 0px 50px -14px rgba(0,0,0,1);-webkit-box-shadow: inset 0px 0px 50px -14px rgba(0,0,0,1); background:#92C3D3;align:center;">';
+            //Single Shift Up Button
+            alertsHTML += '<span id="RAShiftUpBtn" style="cursor:pointer;font-size:14px;">';
+            alertsHTML += '<i class="fa fa-angle-double-up fa-2x" style="color: white; text-shadow: black 0.1em 0.1em 0.2em; vertical-align: top;"> </i>';
+            alertsHTML += '<span id="UpBtnCaption" style="font-weight: bold;"></span>';
+            alertsHTML += '</span><br>';
+            //Single Shift Left Button
+            alertsHTML += '<span id="RAShiftLeftBtn" style="cursor:pointer;font-size:14px;margin-left:-40px;">';
+            alertsHTML += '<i class="fa fa-angle-double-left fa-2x" style="color: white; text-shadow: black 0.1em 0.1em 0.2em; vertical-align: middle"> </i>';
+            alertsHTML += '<span id="LeftBtnCaption" style="font-weight: bold;"></span>';
+            alertsHTML += '</span>';
+            //Single Shift Right Button
+            alertsHTML += '<span id="RAShiftRightBtn" style="float: right;cursor:pointer;font-size:14px;margin-right:5px;">';
+            alertsHTML += '<i class="fa fa-angle-double-right fa-2x" style="color: white;text-shadow: black 0.1em 0.1em 0.2em;  vertical-align: middle"> </i>';
+            alertsHTML += '<span id="RightBtnCaption" style="font-weight: bold;"></span>';
+            alertsHTML += '</span><br>';
+            //Single Shift Down Button
+            alertsHTML += '<span id="RAShiftDownBtn" style="cursor:pointer;font-size:14px;margin-top:0px;">';
+            alertsHTML += '<i class="fa fa-angle-double-down fa-2x" style="color: white;text-shadow: black 0.1em 0.1em 0.2em;  vertical-align: middle"> </i>';
+            alertsHTML += '<span id="DownBtnCaption" style="font-weight: bold;"></span>';
+            alertsHTML += '</span>';
+         alertsHTML += '</div></div></div>';
+         //***************** Rotation **************************
+         // Define BOX
+         alertsHTML += '<div id="contentRotate" style="float:left; text-align: center;width: 120px;max-width: 24%;max-height:145px;margin: 1em auto;opacity:1;border-radius: 2px;-moz-border-radius: 2px;-webkit-border-radius: 4px;border-width:1px;border-style:solid;border-color:#92C3D3;padding:2px;  display:inline-block; border-style:solid; border-width:1px; height:152px;  margin-right:5px;">';
+         alertsHTML += '<b>Rotation amount</b></br><input type="text" name="rotationAmount" id="rotationAmount" size="1" style="float: left; text-align: center;font: inherit; line-height: normal; width: 30px; height: 20px; margin: 5px 4px; box-sizing: border-box; display: block; padding-left: 0; border-bottom-color: rgba(black,.3); background: transparent; outline: none; color: black;" value="1"/> <div style="margin: 5px 4px;">Degree(s)';
+            // Rotation controls
+            alertsHTML += '<div id="rotationControls" style="padding: 6px 4px;width=100px; margin: 20px 0px 50px 0px;align:center;">';
+               // Rotate Button on the Left
+               alertsHTML += '<span id="RARotateLeftBtn" class="btnRotate" style="float: left;">';
+               alertsHTML += '<i class="fa fa-undo fa-2x" style="color: white; text-shadow: black 0.1em 0.1em 0.2em; padding:2px;"> </i>';
+               alertsHTML += '<span id="RotateLeftBtnCaption" style="font-weight: bold;"></span>';
+               alertsHTML += '</span>';
+               // Rotate button on the Right
+               alertsHTML += '<span id="RARotateRightBtn" class="btnRotate" style="float: right;">';
+               alertsHTML += '<i class="fa fa-repeat fa-2x" style="color: white; text-shadow: black 0.1em 0.1em 0.2em; padding:2px;"> </i>';
+               alertsHTML += '<span id="RotateRightBtnCaption" style="font-weight: bold;"></span>';
+         alertsHTML += '</div></div></div>';
+         //********************* Diameter change ******************
+         // Define BOX
+         alertsHTML += '<div id="diameterChange" style="float:left; text-align: center;width: 120px;max-width: 24%;max-height:145px;margin: 1em auto;opacity:1;border-radius: 2px;-moz-border-radius: 2px;-webkit-border-radius: 4px;border-width:1px;border-style:solid;border-color:#92C3D3;padding:2px;  display:inline-block; border-style:solid; border-width:1px; height:152px;  margin-right:5px;">';
+         alertsHTML += '<b>Change diameter</b></br></br>';
+              // Diameter Change controls
+            alertsHTML += '<div id="DiameterChangeControls" style="padding: 6px 4px;width=100px; margin: 5px 7px 50px 7px;align:center;">';
+               // Decrease Button
+               alertsHTML += '<span id="diameterChangeDecreaseBtn" style="float: left; width=45px; height=45px; background-color:#92C3D3; cursor:pointer; padding: 5px; font-size:14px; border:thin outset black; border-style:solid; border-width: 1px;border-radius: 50%;-moz-border-radius: 50%;-webkit-border-radius: 50%;box-shadow: inset 0px 0px 20px -14px rgba(0,0,0,1);-moz-box-shadow: inset 0px 0px 20px -14px rgba(0,0,0,1);-webkit-box-shadow: inset 0px 0px 20px -14px rgba(0,0,0,1);">';
+               alertsHTML += '<i class="fa fa-compress fa-2x" style="color: white; text-shadow: black 0.1em 0.1em 0.2em; padding:2px;;"> </i>';
+               alertsHTML += '<span id="diameterChangeDecreaseCaption" style="font-weight: bold;"></span>';
+               alertsHTML += '</span>';
+               // Increase Button
+               alertsHTML += '<span id="diameterChangeIncreaseBtn" style="float: right; width=45px; height=45px; background-color:#92C3D3; cursor:pointer; padding: 5px; font-size:14px; border:thin outset black; border-style:solid; border-width: 1px;border-radius: 50%;-moz-border-radius: 50%;-webkit-border-radius: 50%;box-shadow: inset 0px 0px 20px -14px rgba(0,0,0,1);-moz-box-shadow: inset 0px 0px 20px -14px rgba(0,0,0,1);-webkit-box-shadow: inset 0px 0px 20px -14px rgba(0,0,0,1);">';
+               alertsHTML += '<i class="fa fa-arrows-alt fa-2x" style="color: white; text-shadow: black 0.1em 0.1em 0.2em; padding:2px;"> </i>';
+               alertsHTML += '<span id="diameterChangeIncreaseCaption" style="font-weight: bold;"></span>';
+               alertsHTML += '</span>';
+         alertsHTML += '</div></div>';
+         //***************** Bump nodes **********************
+         // Define BOX
+         alertsHTML += '<div id="bumpNodes" style="float:left; text-align: center;width: 120px;max-width: 24%;max-height:145px;margin: 1em auto 0px auto;opacity:1;border-radius: 2px;-moz-border-radius: 2px;-webkit-border-radius: 4px;border-width:1px;border-style:solid;border-color:#92C3D3;padding:2px;  display:inline-block; border-style:solid; border-width:1px; height:152px;  margin-right:5px;">';
+         alertsHTML += '<b>Move nodes</b></br>';
+         // Move Nodes controls
+         alertsHTML += '<div id="MoveNodesControls" style="padding: 2px;">';
+            // Button A
+            alertsHTML += '<div style="text-align:center; font-size:18px;">A Node';
+               // Move node IN
+               alertsHTML += '<p><span id="btnMoveANodeIn" class="btnMoveNode">';
+               alertsHTML += '<i class="fa fa-undo" style="color: white; text-shadow: black 0.1em 0.1em 0.2em; padding:2px;"> </i>';
+               alertsHTML += '</span>&nbsp;';
+               // Move node OUT
+               alertsHTML += '<span id="btnMoveANodeOut" class="btnMoveNode">';
+               alertsHTML += '<i class="fa fa-repeat" style="color: white; text-shadow: black 0.1em 0.1em 0.2em; padding:2px;"> </i>';
+               alertsHTML += '</span></div>';
+            // Button B
+            alertsHTML += '<div style="text-align:center; font-size:18px;">B Node';
+               // Move node IN
+               alertsHTML += '<div><span id="btnMoveBNodeOut" class="btnMoveNode">';
+               alertsHTML += '<i class="fa fa-undo" style="color:white; text-shadow:black 0.1em 0.1em 0.2em; padding:2px;"> </i>';
+               alertsHTML += '</span>&nbsp;';
+               // Move node OUT
+               alertsHTML += '<span id="btnMoveBNodeIn" class="btnMoveNode">';
+               alertsHTML += '<i class="fa fa-repeat" style="color: white; text-shadow: black 0.1em 0.1em 0.2em; padding:2px;"> </i>';
+               alertsHTML += '</span></div>';
+        alertsHTML += '</div></div></div>';
 
 
 
@@ -1090,6 +1049,14 @@ normal RA color:#4cc600
 
         drc_layer.removeAllFeatures();
         drc_layer.addFeatures(drc_features);
+    }
+
+    function injectCss() {
+        var css = [
+            '.btnMoveNode {width=25px; height=25px; background-color:#92C3D3; cursor:pointer; padding:5px; font-size:14px; border:thin outset black; border-style:solid; border-width: 1px;border-radius:50%; -moz-border-radius:50%; -webkit-border-radius:50%; box-shadow:inset 0px 0px 20px -14px rgba(0,0,0,1); -moz-box-shadow:inset 0px 0px 20px -14px rgba(0,0,0,1); -webkit-box-shadow: inset 0px 0px 20px -14px rgba(0,0,0,1);}',
+            '.btnRotate { width=45px; height=45px; background-color:#92C3D3; cursor:pointer; padding: 5px; font-size:14px; border:thin outset black; border-style:solid; border-width: 1px;border-radius: 50%;-moz-border-radius: 50%;-webkit-border-radius: 50%;box-shadow: inset 0px 0px 20px -14px rgba(0,0,0,1);-moz-box-shadow: inset 0px 0px 20px -14px rgba(0,0,0,1);-webkit-box-shadow: inset 0px 0px 20px -14px rgba(0,0,0,1);}'
+        ].join(' ');
+        $('<style type="text/css">' + css + '</style>').appendTo('head');
     }
 
 })();
