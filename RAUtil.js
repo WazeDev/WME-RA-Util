@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         WME RA Util
 // @namespace    https://greasyfork.org/users/30701-justins83-waze
-// @version      2020.06.30.01
+// @version      2020.07.08.01
 // @description  Providing basic utility for RA adjustment without the need to delete & recreate
 // @include      https://www.waze.com/editor*
 // @include      https://www.waze.com/*/editor*
@@ -37,7 +37,7 @@ normal RA color:#4cc600
 
     //var totalActions = 0;
     var _settings;
-    const updateMessage = "Beautiful new UI thanks to JanKlaaseen!";
+    const updateMessage = "Changing the Move Node buttons back to text so the purpose is more clear;
 
     function bootstrap(tries = 1) {
 
@@ -152,23 +152,20 @@ normal RA color:#4cc600
             // Button A
             alertsHTML += '<div style="text-align:center; font-size:18px;">A Node';
                // Move node IN
-               alertsHTML += '<p><span id="btnMoveANodeIn" class="btnMoveNode">';
-               alertsHTML += '<i class="fa fa-undo" style="color: white; text-shadow: black 0.1em 0.1em 0.2em; padding:2px;"> </i>';
+               alertsHTML += '<p><span id="btnMoveANodeIn" class="btnMoveNode" style="color: white; font-size: 0.875em; text-shadow: black 0.1em 0.1em 0.2em; padding:3px 15px 3px 15px; margin:3px;">in';
                alertsHTML += '</span>&nbsp;';
                // Move node OUT
-               alertsHTML += '<span id="btnMoveANodeOut" class="btnMoveNode">';
-               alertsHTML += '<i class="fa fa-repeat" style="color: white; text-shadow: black 0.1em 0.1em 0.2em; padding:2px;"> </i>';
+               alertsHTML += '<span id="btnMoveANodeOut" class="btnMoveNode" class="btnMoveNode" style="color: white; font-size: 0.875em; text-shadow: black 0.1em 0.1em 0.2em; padding:3px 10px 3px 10px; margin:3px;">out';
                alertsHTML += '</span></div>';
             // Button B
             alertsHTML += '<div style="text-align:center; font-size:18px;">B Node';
                // Move node IN
-               alertsHTML += '<div><span id="btnMoveBNodeOut" class="btnMoveNode">';
-               alertsHTML += '<i class="fa fa-undo" style="color:white; text-shadow:black 0.1em 0.1em 0.2em; padding:2px;"> </i>';
+               alertsHTML += '<p><span id="btnMoveBNodeIn" class="btnMoveNode" style="color: white; font-size: 0.875em; text-shadow: black 0.1em 0.1em 0.2em; padding:3px 15px 3px 15px; margin:3px;">in';
                alertsHTML += '</span>&nbsp;';
                // Move node OUT
-               alertsHTML += '<span id="btnMoveBNodeIn" class="btnMoveNode">';
-               alertsHTML += '<i class="fa fa-repeat" style="color: white; text-shadow: black 0.1em 0.1em 0.2em; padding:2px;"> </i>';
+               alertsHTML += '<span id="btnMoveBNodeOut" class="btnMoveNode" class="btnMoveNode" style="color: white; font-size: 0.875em; text-shadow: black 0.1em 0.1em 0.2em; padding:3px 10px 3px 10px; margin:3px;">out';
                alertsHTML += '</span></div>';
+        alertsHTML += '</div></div></div>';
         alertsHTML += '</div></div></div>';
 
 
