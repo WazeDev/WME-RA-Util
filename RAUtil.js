@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         WME RA Util
 // @namespace    https://greasyfork.org/users/30701-justins83-waze
-// @version      2020.08.10.01
+// @version      2021.07.27.01
 // @description  Providing basic utility for RA adjustment without the need to delete & recreate
 // @include      https://www.waze.com/editor*
 // @include      https://www.waze.com/*/editor*
@@ -37,7 +37,7 @@ normal RA color:#4cc600
 
     //var totalActions = 0;
     var _settings;
-    const updateMessage = "Bug fix: Collapsed state is now remembered between page loads";
+    const updateMessage = "WME update fixes.";
 
     function bootstrap(tries = 1) {
 
@@ -868,7 +868,7 @@ normal RA color:#4cc600
                 if (junction_coords && junction_coords.length == 2) {
                     //---------- get center point from junction model
                     let lonlat = new OpenLayers.LonLat(junction_coords[0], junction_coords[1]);
-                    lonlat.transform(W.map.displayProjection, W.map.getProjectionObject());
+                    lonlat.transform(W.map.getOLMap().displayProjection, W.map.getProjectionObject());
                     let pt = new OpenLayers.Geometry.Point(lonlat.lon, lonlat.lat);
                     sr_x = pt.x;
                     sr_y = pt.y;
