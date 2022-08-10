@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         WME RA Util
 // @namespace    https://greasyfork.org/users/30701-justins83-waze
-// @version      2021.07.27.01
+// @version      2022.08.10.01
 // @description  Providing basic utility for RA adjustment without the need to delete & recreate
 // @include      https://www.waze.com/editor*
 // @include      https://www.waze.com/*/editor*
@@ -279,20 +279,22 @@ normal RA color:#4cc600
             if(!AllSelectedSegmentsRA() || WazeWrap.getSelectedFeatures().length === 0)
                 $('#RAUtilWindow').css({'visibility': 'hidden'});
             else{
+                dragElement(RAUtilWindow);
                 $('#RAUtilWindow').css({'visibility': 'visible'});
-                if(typeof jQuery.ui !== 'undefined')
+                /* if(typeof jQuery.ui !== 'undefined')
                     $('#RAUtilWindow' ).draggable({ //Gotta nuke the height setting the dragging inserts otherwise the panel cannot collapse
                         stop: function(event, ui) {
                             $('#RAUtilWindow').css("height", "");
                             saveSettingsToStorage();
                         }
-                    });
+                    }); */
                 //checkSaveChanges();
                 checkAllEditable(WazeWrap.Model.getAllRoundaboutSegmentsFromObj(WazeWrap.getSelectedFeatures()[0]));
             }
         }
         else{
             $('#RAUtilWindow').css({'visibility': 'hidden'});
+            /*
             if(typeof jQuery.ui !== 'undefined')
                 $('#RAUtilWindow' ).draggable({
                     stop: function(event, ui) {
@@ -300,7 +302,50 @@ normal RA color:#4cc600
                         saveSettingsToStorage();
                     }
                 });
+                */
         }
+    }
+
+    // dragElement from https://www.w3schools.com/howto/howto_js_draggable.asp
+    function dragElement(elmnt) {
+      var pos1 = 0, pos2 = 0, pos3 = 0, pos4 = 0;
+      if (elmnt.querySelector("#header")) {
+        // if present, the header is where you move the DIV from:
+        elmnt.querySelector("#header").onmousedown = dragMouseDown;
+      } else {
+        // otherwise, move the DIV from anywhere inside the DIV:
+        elmnt.onmousedown = dragMouseDown;
+      }
+
+      function dragMouseDown(e) {
+        e = e || window.event;
+        e.preventDefault();
+        // get the mouse cursor position at startup:
+        pos3 = e.clientX;
+        pos4 = e.clientY;
+        document.onmouseup = closeDragElement;
+        // call a function whenever the cursor moves:
+        document.onmousemove = elementDrag;
+      }
+
+      function elementDrag(e) {
+        e = e || window.event;
+        e.preventDefault();
+        // calculate the new cursor position:
+        pos1 = pos3 - e.clientX;
+        pos2 = pos4 - e.clientY;
+        pos3 = e.clientX;
+        pos4 = e.clientY;
+        // set the element's new position:
+        elmnt.style.top = (elmnt.offsetTop - pos2) + "px";
+        elmnt.style.left = (elmnt.offsetLeft - pos1) + "px";
+      }
+
+      function closeDragElement() {
+        // stop moving when mouse button is released:
+        document.onmouseup = null;
+        document.onmousemove = null;
+      }
     }
 
     function checkAllEditable(RASegs){
@@ -868,7 +913,7 @@ normal RA color:#4cc600
                 if (junction_coords && junction_coords.length == 2) {
                     //---------- get center point from junction model
                     let lonlat = new OpenLayers.LonLat(junction_coords[0], junction_coords[1]);
-                    lonlat.transform(W.map.getOLMap().displayProjection, W.map.getProjectionObject());
+                    lonlat.transform(W.Config.map.projection.remote, W.map.getProjectionObject());
                     let pt = new OpenLayers.Geometry.Point(lonlat.lon, lonlat.lat);
                     sr_x = pt.x;
                     sr_y = pt.y;
