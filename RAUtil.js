@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         WME RA Util
 // @namespace    https://greasyfork.org/users/30701-justins83-waze
-// @version      2022.08.12.03
+// @version      2023.06.06.01
 // @description  Providing basic utility for RA adjustment without the need to delete & recreate
 // @include      https://www.waze.com/editor*
 // @include      https://www.waze.com/*/editor*
@@ -37,7 +37,7 @@ normal RA color:#4cc600
 
     //var totalActions = 0;
     var _settings;
-    const updateMessage = "Like, omg, he actually fixed the blue line issue.";
+    const updateMessage = "Changes for WME updates";
 
     function bootstrap(tries = 1) {
 
@@ -180,10 +180,10 @@ normal RA color:#4cc600
         $('#diameterChangeDecreaseBtn').click(diameterChangeDecreaseBtnClick);
         $('#diameterChangeIncreaseBtn').click(diameterChangeIncreaseBtnClick);
 
-        $('#btnMoveANodeIn').click(function(){moveNodeIn(WazeWrap.getSelectedFeatures()[0].model.attributes.id, WazeWrap.getSelectedFeatures()[0].model.attributes.fromNodeID);});
-        $('#btnMoveANodeOut').click(function(){moveNodeOut(WazeWrap.getSelectedFeatures()[0].model.attributes.id, WazeWrap.getSelectedFeatures()[0].model.attributes.fromNodeID);});
-        $('#btnMoveBNodeIn').click(function(){moveNodeIn(WazeWrap.getSelectedFeatures()[0].model.attributes.id, WazeWrap.getSelectedFeatures()[0].model.attributes.toNodeID);});
-        $('#btnMoveBNodeOut').click(function(){moveNodeOut(WazeWrap.getSelectedFeatures()[0].model.attributes.id, WazeWrap.getSelectedFeatures()[0].model.attributes.toNodeID);});
+        $('#btnMoveANodeIn').click(function(){moveNodeIn(WazeWrap.getSelectedFeatures()[0].attributes.repositoryObject.attributes.id, WazeWrap.getSelectedFeatures()[0].attributes.repositoryObject.attributes.fromNodeID);});
+        $('#btnMoveANodeOut').click(function(){moveNodeOut(WazeWrap.getSelectedFeatures()[0].attributes.repositoryObject.attributes.id, WazeWrap.getSelectedFeatures()[0].attributes.repositoryObject.attributes.fromNodeID);});
+        $('#btnMoveBNodeIn').click(function(){moveNodeIn(WazeWrap.getSelectedFeatures()[0].attributes.repositoryObject.attributes.id, WazeWrap.getSelectedFeatures()[0].attributes.repositoryObject.attributes.toNodeID);});
+        $('#btnMoveBNodeOut').click(function(){moveNodeOut(WazeWrap.getSelectedFeatures()[0].attributes.repositoryObject.attributes.id, WazeWrap.getSelectedFeatures()[0].attributes.repositoryObject.attributes.toNodeID);});
 
         $('#shiftAmount').keypress(function(event) {
             if ((event.which != 46 || $(this).val().indexOf('.') != -1) && (event.which < 48 || event.which > 57))
@@ -353,7 +353,7 @@ normal RA color:#4cc600
 
     function AllSelectedSegmentsRA(){
         for (let i = 0; i < WazeWrap.getSelectedFeatures().length; i++){
-            if(WazeWrap.getSelectedFeatures()[i].model.attributes.id < 0 || !WazeWrap.Model.isRoundaboutSegmentID(WazeWrap.getSelectedFeatures()[i].model.attributes.id))
+            if(WazeWrap.getSelectedFeatures()[i].attributes.repositoryObject.attributes.id < 0 || !WazeWrap.Model.isRoundaboutSegmentID(WazeWrap.getSelectedFeatures()[i].attributes.repositoryObject.attributes.id))
                 return false;
         }
         return true;
@@ -456,13 +456,13 @@ normal RA color:#4cc600
 
     function rotatePoints(origin, points, angle){
         var lineFeature = new OpenLayers.Feature.Vector(new OpenLayers.Geometry.LineString(points),null,null);
-        lineFeature.geometry.rotate(angle, new OpenLayers.Geometry.Point(origin.lon, origin.lat));
+        lineFeature.geometry.rotate(angle, new OpenLayers.Geometry.Point(origin.x, origin.y));
         return [].concat(lineFeature.geometry.components);
     }
 
     function RotateRA(segObj, angle){
         var RASegs = WazeWrap.Model.getAllRoundaboutSegmentsFromObj(segObj);
-        var raCenter = W.model.junctions.objects[segObj.model.attributes.junctionID].geometry.coordinates;
+        var raCenter = W.model.junctions.objects[segObj.attributes.repositoryObject.attributes.junctionID].geometry;
 
         if(checkAllEditable(RASegs)){
             var gps, newGeometry, originalLength;
@@ -475,7 +475,7 @@ normal RA color:#4cc600
                 newGeometry = segObj.geometry.clone();
                 originalLength = segObj.geometry.components.length;
 
-                var center = WazeWrap.Geometry.ConvertTo900913(raCenter[0], raCenter[1]);
+                var center = raCenter; //WazeWrap.Geometry.ConvertTo900913(raCenter.x, raCenter.y);
                 var segPoints = [];
                 //Have to copy the points manually (can't use .clone()) otherwise the geometry rotation modifies the geometry of the segment itself and that hoses WME.
                 for(let j=0; j<originalLength;j++)
@@ -539,12 +539,12 @@ normal RA color:#4cc600
 
     function ChangeDiameter(segObj, amount){
         var RASegs = WazeWrap.Model.getAllRoundaboutSegmentsFromObj(segObj);
-        var raCenter = W.model.junctions.objects[segObj.model.attributes.junctionID].geometry.coordinates;
-
+        var raCenter = W.model.junctions.objects[segObj.attributes.repositoryObject.attributes.junctionID].geometry;
+debugger;
         if(checkAllEditable(RASegs)){
             var gps, newGeometry, originalLength;
 
-            var center = WazeWrap.Geometry.ConvertTo900913(raCenter[0], raCenter[1]);
+            var center = raCenter; //WazeWrap.Geometry.ConvertTo900913(raCenter[0], raCenter[1]);
             //Loop through all RA segments & adjust
             for(let i=0; i<RASegs.length; i++){
                 segObj = W.model.segments.getObjectById(RASegs[i]);
@@ -553,12 +553,12 @@ normal RA color:#4cc600
 
                 for(let j=1; j < originalLength-1; j++){
                     let pt = segObj.geometry.components[j];
-                    let h = Math.sqrt(Math.abs(Math.pow((pt.x - center.lon),2) + Math.pow((pt.y - center.lat),2)));
+                    let h = Math.sqrt(Math.abs(Math.pow((pt.x - center.x),2) + Math.pow((pt.y - center.y),2)));
                     let ratio = (h + amount)/h;
-                    let xdelta = (pt.x - center.lon) * ratio;
-                    let ydelta = (pt.y - center.lat) * ratio;
+                    let xdelta = (pt.x - center.x) * ratio;
+                    let ydelta = (pt.y - center.y) * ratio;
 
-                    newGeometry.components.splice(j,0, new OpenLayers.Geometry.Point(center.lon + xdelta, center.lat + ydelta));
+                    newGeometry.components.splice(j,0, new OpenLayers.Geometry.Point(center.x + xdelta, center.y + ydelta));
                     newGeometry.components.splice(j+1,1);
                 }
                 newGeometry.components[0].calculateBounds();
@@ -570,12 +570,12 @@ normal RA color:#4cc600
                     node = W.model.nodes.objects[segObj.attributes.fromNodeID];
 
                 var newNodeGeometry = node.geometry.clone();
-                let h = Math.sqrt(Math.abs(Math.pow((newNodeGeometry.x - center.lon),2) + Math.pow((newNodeGeometry.y - center.lat),2)));
+                let h = Math.sqrt(Math.abs(Math.pow((newNodeGeometry.x - center.x),2) + Math.pow((newNodeGeometry.y - center.y),2)));
                 let ratio = (h + amount)/h;
-                let xdelta = (newNodeGeometry.x - center.lon) * ratio;
-                let ydelta = (newNodeGeometry.y - center.lat) * ratio;
-                newNodeGeometry.x = center.lon + xdelta;
-                newNodeGeometry.y = center.lat + ydelta;
+                let xdelta = (newNodeGeometry.x - center.x) * ratio;
+                let ydelta = (newNodeGeometry.y - center.y) * ratio;
+                newNodeGeometry.x = center.x + xdelta;
+                newNodeGeometry.y = center.y + ydelta;
                 newNodeGeometry.calculateBounds();
                 var connectedSegObjs = {};
                 var emptyObj = {};
