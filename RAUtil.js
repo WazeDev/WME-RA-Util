@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         WME RA Util
 // @namespace    https://greasyfork.org/users/30701-justins83-waze
-// @version      2023.07.14.01
+// @version      2023.07.14.02
 // @description  Providing basic utility for RA adjustment without the need to delete & recreate
 // @include      https://www.waze.com/editor*
 // @include      https://www.waze.com/*/editor*
@@ -275,7 +275,7 @@ normal RA color:#4cc600
     }
 
     function checkDisplayTool(){
-        if(WazeWrap.hasSelectedFeatures() && WazeWrap.getSelectedFeatures()[0].model.type === 'segment'){
+        if(WazeWrap.hasSelectedFeatures() && WazeWrap.getSelectedFeatures()[0].WW.getType() === 'segment'){
             if(!AllSelectedSegmentsRA() || WazeWrap.getSelectedFeatures().length === 0)
                 $('#RAUtilWindow').css({'visibility': 'hidden'});
             else{
