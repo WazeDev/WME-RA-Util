@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         WME RA Util
 // @namespace    https://greasyfork.org/users/30701-justins83-waze
-// @version      2023.06.06.01
+// @version      2023.07.14.01
 // @description  Providing basic utility for RA adjustment without the need to delete & recreate
 // @include      https://www.waze.com/editor*
 // @include      https://www.waze.com/*/editor*
@@ -37,7 +37,7 @@ normal RA color:#4cc600
 
     //var totalActions = 0;
     var _settings;
-    const updateMessage = "Changes for WME updates";
+    const updateMessage = "Updated to new WazeWrap features that wrap native functionality that I don't trust won't change again randomly.";
 
     function bootstrap(tries = 1) {
 
@@ -180,10 +180,10 @@ normal RA color:#4cc600
         $('#diameterChangeDecreaseBtn').click(diameterChangeDecreaseBtnClick);
         $('#diameterChangeIncreaseBtn').click(diameterChangeIncreaseBtnClick);
 
-        $('#btnMoveANodeIn').click(function(){moveNodeIn(WazeWrap.getSelectedFeatures()[0].attributes.repositoryObject.attributes.id, WazeWrap.getSelectedFeatures()[0].attributes.repositoryObject.attributes.fromNodeID);});
-        $('#btnMoveANodeOut').click(function(){moveNodeOut(WazeWrap.getSelectedFeatures()[0].attributes.repositoryObject.attributes.id, WazeWrap.getSelectedFeatures()[0].attributes.repositoryObject.attributes.fromNodeID);});
-        $('#btnMoveBNodeIn').click(function(){moveNodeIn(WazeWrap.getSelectedFeatures()[0].attributes.repositoryObject.attributes.id, WazeWrap.getSelectedFeatures()[0].attributes.repositoryObject.attributes.toNodeID);});
-        $('#btnMoveBNodeOut').click(function(){moveNodeOut(WazeWrap.getSelectedFeatures()[0].attributes.repositoryObject.attributes.id, WazeWrap.getSelectedFeatures()[0].attributes.repositoryObject.attributes.toNodeID);});
+        $('#btnMoveANodeIn').click(function(){moveNodeIn(WazeWrap.getSelectedFeatures()[0].WW.getObjectModel().attributes.id, WazeWrap.getSelectedFeatures()[0].WW.getObjectModel().attributes.fromNodeID);});
+        $('#btnMoveANodeOut').click(function(){moveNodeOut(WazeWrap.getSelectedFeatures()[0].WW.getObjectModel().attributes.id, WazeWrap.getSelectedFeatures()[0].WW.getObjectModel().attributes.fromNodeID);});
+        $('#btnMoveBNodeIn').click(function(){moveNodeIn(WazeWrap.getSelectedFeatures()[0].WW.getObjectModel().attributes.id, WazeWrap.getSelectedFeatures()[0].WW.getObjectModel().attributes.toNodeID);});
+        $('#btnMoveBNodeOut').click(function(){moveNodeOut(WazeWrap.getSelectedFeatures()[0].WW.getObjectModel().attributes.id, WazeWrap.getSelectedFeatures()[0].WW.getObjectModel().attributes.toNodeID);});
 
         $('#shiftAmount').keypress(function(event) {
             if ((event.which != 46 || $(this).val().indexOf('.') != -1) && (event.which < 48 || event.which > 57))
@@ -353,7 +353,7 @@ normal RA color:#4cc600
 
     function AllSelectedSegmentsRA(){
         for (let i = 0; i < WazeWrap.getSelectedFeatures().length; i++){
-            if(WazeWrap.getSelectedFeatures()[i].attributes.repositoryObject.attributes.id < 0 || !WazeWrap.Model.isRoundaboutSegmentID(WazeWrap.getSelectedFeatures()[i].attributes.repositoryObject.attributes.id))
+            if(WazeWrap.getSelectedFeatures()[i].WW.getObjectModel().attributes.id < 0 || !WazeWrap.Model.isRoundaboutSegmentID(WazeWrap.getSelectedFeatures()[i].WW.getObjectModel().attributes.id))
                 return false;
         }
         return true;
@@ -462,7 +462,7 @@ normal RA color:#4cc600
 
     function RotateRA(segObj, angle){
         var RASegs = WazeWrap.Model.getAllRoundaboutSegmentsFromObj(segObj);
-        var raCenter = W.model.junctions.objects[segObj.attributes.repositoryObject.attributes.junctionID].geometry;
+        var raCenter = W.model.junctions.objects[WazeWrap.Model.getModelObj(segObj).attributes.junctionID].geometry;
 
         if(checkAllEditable(RASegs)){
             var gps, newGeometry, originalLength;
@@ -539,8 +539,8 @@ normal RA color:#4cc600
 
     function ChangeDiameter(segObj, amount){
         var RASegs = WazeWrap.Model.getAllRoundaboutSegmentsFromObj(segObj);
-        var raCenter = W.model.junctions.objects[segObj.attributes.repositoryObject.attributes.junctionID].geometry;
-debugger;
+        var raCenter = W.model.junctions.objects[WazeWrap.Model.getModelObj(segObj).attributes.junctionID].geometry;
+
         if(checkAllEditable(RASegs)){
             var gps, newGeometry, originalLength;
 
@@ -892,6 +892,7 @@ debugger;
                     sr_y = (sr_x - x1) * dy1 / dx1 + y11;
                 }
                 else {
+                    debugger;
                     //---------- simple bounds-based calculation of center point
                     var rbounds = new OpenLayers.Bounds();
                     rbounds.extend(isegment.geometry.bounds);
