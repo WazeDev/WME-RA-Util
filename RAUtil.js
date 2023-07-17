@@ -462,7 +462,7 @@ normal RA color:#4cc600
 
     function RotateRA(segObj, angle){
         var RASegs = WazeWrap.Model.getAllRoundaboutSegmentsFromObj(segObj);
-        var raCenter = W.model.junctions.objects[WazeWrap.Model.getModelObj(segObj).attributes.junctionID].geometry;
+        var raCenter = W.model.junctions.objects[WazeWrap.Model.getObjectModel(segObj).attributes.junctionID].geometry;
 
         if(checkAllEditable(RASegs)){
             var gps, newGeometry, originalLength;
@@ -539,7 +539,7 @@ normal RA color:#4cc600
 
     function ChangeDiameter(segObj, amount){
         var RASegs = WazeWrap.Model.getAllRoundaboutSegmentsFromObj(segObj);
-        var raCenter = W.model.junctions.objects[WazeWrap.Model.getModelObj(segObj).attributes.junctionID].geometry;
+        var raCenter = W.model.junctions.objects[WazeWrap.Model.getObjectModel(segObj).attributes.junctionID].geometry;
 
         if(checkAllEditable(RASegs)){
             var gps, newGeometry, originalLength;
