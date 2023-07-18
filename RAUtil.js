@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         WME RA Util
 // @namespace    https://greasyfork.org/users/30701-justins83-waze
-// @version      2023.07.17.01
+// @version      2023.07.18.01
 // @description  Providing basic utility for RA adjustment without the need to delete & recreate
 // @include      https://www.waze.com/editor*
 // @include      https://www.waze.com/*/editor*
@@ -9,7 +9,7 @@
 // @exclude      https://www.waze.com/user/editor*
 // @require      https://greasyfork.org/scripts/24851-wazewrap/code/WazeWrap.js
 // @author       JustinS83
-// @grant        none
+// @grant       GM_xmlhttpRequest
 // @license      GPLv3
 // @contributionURL https://github.com/WazeDev/Thank-The-Authors
 // ==/UserScript==
@@ -34,23 +34,36 @@ normal RA color:#4cc600
     var MoveNode, MultiAction;
     var drc_layer;
 	let wEvents;
+    const SCRIPT_VERSION = GM_info.script.version.toString();
+    const SCRIPT_NAME = GM_info.script.name;
+    const DOWNLOAD_URL = GM_info.script.downloadURL;
 
     //var totalActions = 0;
     var _settings;
-    const updateMessage = "Updated to new WazeWrap features that wrap native functionality that I don't trust won't change again randomly.";
+    const updateMessage = "Fixing Roundabout Angles portion.";
 
     function bootstrap(tries = 1) {
 
-        if (W && W.map &&
-            W.model && require &&
-            WazeWrap.Ready)
+        if (W && W.map && W.model && require && WazeWrap.Ready){
+            loadScriptUpdateMonitor();
             init();
+        }
         else if (tries < 1000)
             setTimeout(function () {bootstrap(++tries);}, 200);
     }
 
     bootstrap();
 
+    function loadScriptUpdateMonitor() {
+        let updateMonitor;
+        try {
+            updateMonitor = new WazeWrap.Alerts.ScriptUpdateMonitor(SCRIPT_NAME, SCRIPT_VERSION, DOWNLOAD_URL, GM_xmlhttpRequest);
+            updateMonitor.start();
+        } catch (ex) {
+            // Report, but don't stop if ScriptUpdateMonitor fails.
+            console.error(`${SCRIPT_NAME}:`, ex);
+        }
+    }
 
     function init(){
         injectCss();
@@ -58,6 +71,8 @@ normal RA color:#4cc600
         MoveNode = require("Waze/Action/MoveNode");
         MultiAction = require("Waze/Action/MultiAction");
 
+        console.log("RA UTIL");
+        console.log(GM_info.script);
         if(W.map.events)
 		    wEvents = W.map.events;
 	    else
@@ -839,7 +854,6 @@ normal RA color:#4cc600
             let rsegs = rsegments[irid];
 
             let isegment = rsegs[0];
-            var jsegment;
 
             var nodes = [];
             var nodes_x = [];
@@ -892,11 +906,9 @@ normal RA color:#4cc600
                     sr_y = (sr_x - x1) * dy1 / dx1 + y11;
                 }
                 else {
-                    debugger;
                     //---------- simple bounds-based calculation of center point
                     var rbounds = new OpenLayers.Bounds();
                     rbounds.extend(isegment.geometry.bounds);
-                    rbounds.extend(jsegment.geometry.bounds);
 
                     var center = rbounds.getCenterPixel();
                     sr_x = center.x;
