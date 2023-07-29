@@ -1,13 +1,14 @@
 // ==UserScript==
 // @name         WME RA Util
 // @namespace    https://greasyfork.org/users/30701-justins83-waze
-// @version      2023.07.29.01
+// @version      2023.07.29.02
 // @description  Providing basic utility for RA adjustment without the need to delete & recreate
 // @include      https://www.waze.com/editor*
 // @include      https://www.waze.com/*/editor*
 // @include      https://beta.waze.com/*
 // @exclude      https://www.waze.com/user/editor*
 // @require      https://greasyfork.org/scripts/24851-wazewrap/code/WazeWrap.js
+// @connect     greasyfork.org
 // @author       JustinS83
 // @grant       GM_xmlhttpRequest
 // @license      GPLv3
