@@ -9,7 +9,7 @@
 // @exclude      https://www.waze.com/user/editor*
 // @require      https://greasyfork.org/scripts/24851-wazewrap/code/WazeWrap.js
 // @connect      greasyfork.org
-// @author       JustinS83, macca (2023.11.23.01)
+// @author       JustinS83
 // @grant        GM_xmlhttpRequest
 // @license      GPLv3
 // @contributionURL https://github.com/WazeDev/Thank-The-Authors
