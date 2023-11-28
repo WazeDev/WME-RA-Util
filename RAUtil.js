@@ -1,16 +1,16 @@
 // ==UserScript==
 // @name         WME RA Util
 // @namespace    https://greasyfork.org/users/30701-justins83-waze
-// @version      2023.07.29.02
+// @version      2023.11.23.01
 // @description  Providing basic utility for RA adjustment without the need to delete & recreate
 // @include      https://www.waze.com/editor*
 // @include      https://www.waze.com/*/editor*
 // @include      https://beta.waze.com/*
 // @exclude      https://www.waze.com/user/editor*
 // @require      https://greasyfork.org/scripts/24851-wazewrap/code/WazeWrap.js
-// @connect     greasyfork.org
+// @connect      greasyfork.org
 // @author       JustinS83
-// @grant       GM_xmlhttpRequest
+// @grant        GM_xmlhttpRequest
 // @license      GPLv3
 // @contributionURL https://github.com/WazeDev/Thank-The-Authors
 // ==/UserScript==
@@ -41,7 +41,7 @@ normal RA color:#4cc600
 
     //var totalActions = 0;
     var _settings;
-    const updateMessage = "Fixing Roundabout Angles portion.";
+    const updateMessage = "Fixed for the latest WME update. Now using GeoJSON.";
 
     function bootstrap(tries = 1) {
 
@@ -378,44 +378,34 @@ normal RA color:#4cc600
     function ShiftSegmentNodesLat(segObj, latOffset){
         var RASegs = WazeWrap.Model.getAllRoundaboutSegmentsFromObj(segObj);
         if(checkAllEditable(RASegs)){
-            var gps;
-            var newGeometry = segObj.geometry.clone();
-            var originalLength = segObj.geometry.components.length;
+            var newGeometry, originalLength;
             var multiaction = new MultiAction();
             multiaction.setModel(W.model);
 
             for(let i=0; i<RASegs.length; i++){
                 segObj = W.model.segments.getObjectById(RASegs[i]);
-                newGeometry = segObj.geometry.clone();
-                originalLength = segObj.geometry.components.length;
+                newGeometry = structuredClone(segObj.attributes.geoJSONGeometry);
+                originalLength = segObj.attributes.geoJSONGeometry.coordinates.length;
                 for(j=1; j < originalLength-1; j++){
-                    gps = WazeWrap.Geometry.ConvertTo4326(segObj.geometry.components[j].x, segObj.geometry.components[j].y);
-                    gps.lat += latOffset;
-                    newGeometry.components.splice(j,0, new OpenLayers.Geometry.Point(segObj.geometry.components[j].x, WazeWrap.Geometry.ConvertTo900913(segObj.geometry.components[j].x,gps.lat).lat));
-                    newGeometry.components.splice(j+1,1);
+                    newGeometry.coordinates[j][1] += latOffset;
                 }
-                newGeometry.components[0].calculateBounds();
-                newGeometry.components[originalLength-1].calculateBounds();
-                multiaction.doSubAction(new UpdateSegmentGeometry(segObj, segObj.geometry, newGeometry));
                 //W.model.actionManager.add(new UpdateSegmentGeometry(segObj, segObj.geometry, newGeometry));
+                multiaction.doSubAction(new UpdateSegmentGeometry(segObj, segObj.attributes.geoJSONGeometry, newGeometry));
 
                 var node = W.model.nodes.objects[segObj.attributes.toNodeID];
                 if(segObj.attributes.revDirection)
                     node = W.model.nodes.objects[segObj.attributes.fromNodeID];
-                var newNodeGeometry = node.geometry.clone();
-                gps = WazeWrap.Geometry.ConvertTo4326(node.attributes.geometry.x, node.attributes.geometry.y);
-                gps.lat += latOffset;
-                newNodeGeometry.y = WazeWrap.Geometry.ConvertTo900913(node.geometry.x, gps.lat).lat;
-                newNodeGeometry.calculateBounds();
+                var newNodeGeometry = structuredClone(node.attributes.geoJSONGeometry);
+                newNodeGeometry.coordinates[1] += latOffset;
 
                 var connectedSegObjs = {};
                 var emptyObj = {};
                 for(var j=0;j<node.attributes.segIDs.length;j++){
                     var segid = node.attributes.segIDs[j];
-                    connectedSegObjs[segid] = W.model.segments.getObjectById(segid).geometry.clone();
+                    connectedSegObjs[segid] = structuredClone(W.model.segments.getObjectById(segid).attributes.geoJSONGeometry);
                 }
                 //W.model.actionManager.add(new MoveNode(segObj, segObj.geometry, newNodeGeometry, connectedSegObjs, i));
-                multiaction.doSubAction(new MoveNode(node, node.geometry, newNodeGeometry,connectedSegObjs,emptyObj));
+                multiaction.doSubAction(new MoveNode(node, node.attributes.geoJSONGeometry, newNodeGeometry, connectedSegObjs, emptyObj));
                 //W.model.actionManager.add(new MoveNode(node, node.geometry, newNodeGeometry));
                 //totalActions +=2;
             }
@@ -426,44 +416,36 @@ normal RA color:#4cc600
     function ShiftSegmentsNodesLong(segObj, longOffset){
         var RASegs = WazeWrap.Model.getAllRoundaboutSegmentsFromObj(segObj);
         if(checkAllEditable(RASegs)){
-            var gps, newGeometry, originalLength;
+            var newGeometry, originalLength;
             var multiaction = new MultiAction();
             multiaction.setModel(W.model);
 
             //Loop through all RA segments & adjust
             for(let i=0; i<RASegs.length; i++){
                 segObj = W.model.segments.getObjectById(RASegs[i]);
-                newGeometry = segObj.geometry.clone();
-                originalLength = segObj.geometry.components.length;
+                newGeometry = structuredClone(segObj.attributes.geoJSONGeometry);
+                originalLength = segObj.attributes.geoJSONGeometry.coordinates.length;
                 for(let j=1; j < originalLength-1; j++){
-                    gps = WazeWrap.Geometry.ConvertTo4326(segObj.geometry.components[j].x, segObj.geometry.components[j].y);
-                    gps.lon += longOffset;
-                    newGeometry.components.splice(j,0, new OpenLayers.Geometry.Point(WazeWrap.Geometry.ConvertTo900913(gps.lon, segObj.geometry.components[j].y).lon, segObj.geometry.components[j].y));
-                    newGeometry.components.splice(j+1,1);
+                    newGeometry.coordinates[j][0] += longOffset;
                 }
-                newGeometry.components[0].calculateBounds();
-                newGeometry.components[originalLength-1].calculateBounds();
                 //W.model.actionManager.add(new UpdateSegmentGeometry(segObj, segObj.geometry, newGeometry));
-                multiaction.doSubAction(new UpdateSegmentGeometry(segObj, segObj.geometry, newGeometry));
+                multiaction.doSubAction(new UpdateSegmentGeometry(segObj, segObj.attributes.geoJSONGeometry, newGeometry));
 
                 var node = W.model.nodes.objects[segObj.attributes.toNodeID];
                 if(segObj.attributes.revDirection)
                     node = W.model.nodes.objects[segObj.attributes.fromNodeID];
 
-                var newNodeGeometry = node.geometry.clone();
-                gps = WazeWrap.Geometry.ConvertTo4326(node.attributes.geometry.x, node.attributes.geometry.y);
-                gps.lon += longOffset;
-                newNodeGeometry.x = WazeWrap.Geometry.ConvertTo900913(gps.lon, node.geometry.y).lon;
-                newNodeGeometry.calculateBounds();
+                var newNodeGeometry = structuredClone(node.attributes.geoJSONGeometry);
+                newNodeGeometry.coordinates[0] += longOffset;
 
                 var connectedSegObjs = {};
                 var emptyObj = {};
                 for(let j=0;j<node.attributes.segIDs.length;j++){
                     var segid = node.attributes.segIDs[j];
-                    connectedSegObjs[segid] = W.model.segments.getObjectById(segid).geometry.clone();
+                    connectedSegObjs[segid] = structuredClone(W.model.segments.getObjectById(segid).attributes.geoJSONGeometry);
                 }
                 //W.model.actionManager.add(new MoveNode(node, node.geometry, newNodeGeometry));
-                multiaction.doSubAction(new MoveNode(node, node.geometry, newNodeGeometry, connectedSegObjs, emptyObj));
+                multiaction.doSubAction(new MoveNode(node, node.attributes.geoJSONGeometry, newNodeGeometry, connectedSegObjs, emptyObj));
                 //totalActions +=2;
             }
             W.model.actionManager.add(multiaction);
@@ -472,13 +454,13 @@ normal RA color:#4cc600
 
     function rotatePoints(origin, points, angle){
         var lineFeature = new OpenLayers.Feature.Vector(new OpenLayers.Geometry.LineString(points),null,null);
-        lineFeature.geometry.rotate(angle, new OpenLayers.Geometry.Point(origin.x, origin.y));
+        lineFeature.geometry.rotate(angle, new OpenLayers.Geometry.Point(origin[0], origin[1]));
         return [].concat(lineFeature.geometry.components);
     }
 
     function RotateRA(segObj, angle){
         var RASegs = WazeWrap.Model.getAllRoundaboutSegmentsFromObj(segObj);
-        var raCenter = W.model.junctions.objects[WazeWrap.Model.getObjectModel(segObj).attributes.junctionID].geometry;
+        var raCenter = W.model.junctions.objects[WazeWrap.Model.getObjectModel(segObj).attributes.junctionID].attributes.geoJSONGeometry.coordinates;
 
         if(checkAllEditable(RASegs)){
             var gps, newGeometry, originalLength;
@@ -488,26 +470,23 @@ normal RA color:#4cc600
             //Loop through all RA segments & adjust
             for(let i=0; i<RASegs.length; i++){
                 segObj = W.model.segments.getObjectById(RASegs[i]);
-                newGeometry = segObj.geometry.clone();
-                originalLength = segObj.geometry.components.length;
+                newGeometry = structuredClone(segObj.attributes.geoJSONGeometry);
+                originalLength = segObj.attributes.geoJSONGeometry.coordinates.length;
 
                 var center = raCenter; //WazeWrap.Geometry.ConvertTo900913(raCenter.x, raCenter.y);
                 var segPoints = [];
                 //Have to copy the points manually (can't use .clone()) otherwise the geometry rotation modifies the geometry of the segment itself and that hoses WME.
                 for(let j=0; j<originalLength;j++)
-                    segPoints.push(new OpenLayers.Geometry.Point(segObj.geometry.components[j].x, segObj.geometry.components[j].y));
+                    segPoints.push(new OpenLayers.Geometry.Point(segObj.attributes.geoJSONGeometry.coordinates[j][0], segObj.attributes.geoJSONGeometry.coordinates[j][1]));
 
                 var newPoints = rotatePoints(center, segPoints, angle);
 
                 for(let j=1; j<originalLength-1;j++){
-                    newGeometry.components.splice(j, 0, new OpenLayers.Geometry.Point(newPoints[j].x, newPoints[j].y));
-                    newGeometry.components.splice(j+1,1);
+                    newGeometry.coordinates[j] = [newPoints[j].x, newPoints[j].y];
                 }
 
-                newGeometry.components[0].calculateBounds();
-                newGeometry.components[originalLength-1].calculateBounds();
                 //W.model.actionManager.add(new UpdateSegmentGeometry(segObj, segObj.geometry, newGeometry));
-                multiaction.doSubAction(new UpdateSegmentGeometry(segObj, segObj.geometry, newGeometry));
+                multiaction.doSubAction(new UpdateSegmentGeometry(segObj, segObj.attributes.geoJSONGeometry, newGeometry));
 
                 //**************Rotate Nodes******************
                 var node = W.model.nodes.objects[segObj.attributes.toNodeID];
@@ -515,25 +494,22 @@ normal RA color:#4cc600
                     node = W.model.nodes.objects[segObj.attributes.fromNodeID];
 
                 var nodePoints = [];
-                var newNodeGeometry = node.geometry.clone();
+                var newNodeGeometry = structuredClone(node.attributes.geoJSONGeometry);
 
-                nodePoints.push(new OpenLayers.Geometry.Point(node.attributes.geometry.x, node.attributes.geometry.y));
-                nodePoints.push(new OpenLayers.Geometry.Point(node.attributes.geometry.x, node.attributes.geometry.y)); //add it twice because lines need 2 points
+                nodePoints.push(new OpenLayers.Geometry.Point(node.attributes.geoJSONGeometry.coordinates[0], node.attributes.geoJSONGeometry.coordinates[1]));
+                nodePoints.push(new OpenLayers.Geometry.Point(node.attributes.geoJSONGeometry.coordinates[0], node.attributes.geoJSONGeometry.coordinates[1])); //add it twice because lines need 2 points
 
                 gps = rotatePoints(center, nodePoints, angle);
 
-                newNodeGeometry.x = gps[0].x;
-                newNodeGeometry.y = gps[0].y;
-
-                newNodeGeometry.calculateBounds();
+                newNodeGeometry.coordinates = [gps[0].x, gps[0].y];
 
                 var connectedSegObjs = {};
                 var emptyObj = {};
                 for(let j=0;j<node.attributes.segIDs.length;j++){
                     var segid = node.attributes.segIDs[j];
-                    connectedSegObjs[segid] = W.model.segments.getObjectById(segid).geometry.clone();
+                    connectedSegObjs[segid] = structuredClone(W.model.segments.getObjectById(segid).attributes.geoJSONGeometry);
                 }
-                multiaction.doSubAction(new MoveNode(node, node.geometry, newNodeGeometry, connectedSegObjs, emptyObj));
+                multiaction.doSubAction(new MoveNode(node, node.attributes.geoJSONGeometry, newNodeGeometry, connectedSegObjs, emptyObj));
                 //totalActions +=2;
             }
             W.model.actionManager.add(multiaction);
@@ -555,51 +531,52 @@ normal RA color:#4cc600
 
     function ChangeDiameter(segObj, amount){
         var RASegs = WazeWrap.Model.getAllRoundaboutSegmentsFromObj(segObj);
-        var raCenter = W.model.junctions.objects[WazeWrap.Model.getObjectModel(segObj).attributes.junctionID].geometry;
+        var raCenter = W.model.junctions.objects[WazeWrap.Model.getObjectModel(segObj).attributes.junctionID].attributes.geoJSONGeometry.coordinates;
+        let { lon: centerX, lat: centerY } = WazeWrap.Geometry.ConvertTo900913(raCenter);
 
         if(checkAllEditable(RASegs)){
-            var gps, newGeometry, originalLength;
+            var newGeometry, originalLength;
 
-            var center = raCenter; //WazeWrap.Geometry.ConvertTo900913(raCenter[0], raCenter[1]);
             //Loop through all RA segments & adjust
             for(let i=0; i<RASegs.length; i++){
                 segObj = W.model.segments.getObjectById(RASegs[i]);
-                newGeometry = segObj.geometry.clone();
-                originalLength = segObj.geometry.components.length;
+                newGeometry = structuredClone(segObj.attributes.geoJSONGeometry);
+                originalLength = segObj.attributes.geoJSONGeometry.coordinates.length;
 
                 for(let j=1; j < originalLength-1; j++){
-                    let pt = segObj.geometry.components[j];
-                    let h = Math.sqrt(Math.abs(Math.pow((pt.x - center.x),2) + Math.pow((pt.y - center.y),2)));
+                    let pt = segObj.attributes.geoJSONGeometry.coordinates[j];
+                    let { lon: pointX, lat: pointY } = WazeWrap.Geometry.ConvertTo900913(pt);
+                    let h = Math.sqrt(Math.abs(Math.pow(pointX - centerX, 2) + Math.pow(pointY - centerY, 2)));
                     let ratio = (h + amount)/h;
-                    let xdelta = (pt.x - center.x) * ratio;
-                    let ydelta = (pt.y - center.y) * ratio;
+                    let x = centerX + (pointX - centerX) * ratio;
+                    let y = centerY + (pointY - centerY) * ratio;
 
-                    newGeometry.components.splice(j,0, new OpenLayers.Geometry.Point(center.x + xdelta, center.y + ydelta));
-                    newGeometry.components.splice(j+1,1);
+                    let { lon: newX, lat: newY } = WazeWrap.Geometry.ConvertTo4326([x, y]);
+                    newGeometry.coordinates[j] = [newX, newY];
                 }
-                newGeometry.components[0].calculateBounds();
-                newGeometry.components[originalLength-1].calculateBounds();
-                W.model.actionManager.add(new UpdateSegmentGeometry(segObj, segObj.geometry, newGeometry));
+                W.model.actionManager.add(new UpdateSegmentGeometry(segObj, segObj.attributes.geoJSONGeometry, newGeometry));
 
                 var node = W.model.nodes.objects[segObj.attributes.toNodeID];
                 if(segObj.attributes.revDirection)
                     node = W.model.nodes.objects[segObj.attributes.fromNodeID];
 
-                var newNodeGeometry = node.geometry.clone();
-                let h = Math.sqrt(Math.abs(Math.pow((newNodeGeometry.x - center.x),2) + Math.pow((newNodeGeometry.y - center.y),2)));
+                var newNodeGeometry = structuredClone(node.attributes.geoJSONGeometry);
+                let { lon: pointX, lat: pointY } = WazeWrap.Geometry.ConvertTo900913(newNodeGeometry.coordinates);
+                let h = Math.sqrt(Math.abs(Math.pow(pointX - centerX, 2) + Math.pow(pointY - centerY, 2)));
                 let ratio = (h + amount)/h;
-                let xdelta = (newNodeGeometry.x - center.x) * ratio;
-                let ydelta = (newNodeGeometry.y - center.y) * ratio;
-                newNodeGeometry.x = center.x + xdelta;
-                newNodeGeometry.y = center.y + ydelta;
-                newNodeGeometry.calculateBounds();
+                let x = centerX + (pointX - centerX) * ratio;
+                let y = centerY + (pointY - centerY) * ratio;
+
+                let { lon: newX, lat: newY } = WazeWrap.Geometry.ConvertTo4326([x, y]);
+                newNodeGeometry.coordinates = [newX, newY];
+
                 var connectedSegObjs = {};
                 var emptyObj = {};
                 for(let j=0;j<node.attributes.segIDs.length;j++){
                     var segid = node.attributes.segIDs[j];
-                    connectedSegObjs[segid] = W.model.segments.getObjectById(segid).geometry.clone();
+                    connectedSegObjs[segid] = structuredClone(W.model.segments.getObjectById(segid).attributes.geoJSONGeometry);
                 }
-                W.model.actionManager.add(new MoveNode(node, node.geometry, newNodeGeometry, connectedSegObjs, emptyObj));
+                W.model.actionManager.add(new MoveNode(node, node.attributes.geoJSONGeometry, newNodeGeometry, connectedSegObjs, emptyObj));
             }
             if(_settings.RoundaboutAngles)
                 DrawRoundaboutAngles();
@@ -621,12 +598,12 @@ normal RA color:#4cc600
     function moveNodeIn(sourceSegID, nodeID){
         let isANode = true;
         let curSeg = W.model.segments.getObjectById(sourceSegID);
-        if(curSeg.geometry.components.length > 2){
+        if (curSeg.attributes.geoJSONGeometry.coordinates.length > 2) {
             if(nodeID === curSeg.attributes.toNodeID)
                 isANode = false;
             //Add geo point on the other segment
             let node = W.model.nodes.getObjectById(nodeID);
-            let currNodePOS = node.geometry.clone();
+            let currNodePOS = structuredClone(node.attributes.geoJSONGeometry.coordinates);
             let otherSeg; //other RA segment that we are adding a geo point to
             let nodeSegs = [...W.model.nodes.getObjectById(nodeID).attributes.segIDs];
             nodeSegs = _.without(nodeSegs, sourceSegID); //remove the source segment from the node Segs - we need to find the segment that is a part of the RA that is prior to our source seg
@@ -641,36 +618,28 @@ normal RA color:#4cc600
             var multiaction = new MultiAction();
             multiaction.setModel(W.model);
             //note and remove first geo point, move junction node to this point
-            var newNodeGeometry = curSeg.geometry.components[(isANode ? 1 : curSeg.geometry.components.length - 2)].clone();
-            newNodeGeometry.calculateBounds();
+            var newNodeGeometry = { type: 'Point', coordinates: structuredClone(curSeg.attributes.geoJSONGeometry.coordinates[isANode ? 1 : curSeg.attributes.geoJSONGeometry.coordinates.length - 2]) };
 
-            let newSegGeo = curSeg.geometry.clone();
-            newSegGeo.components.splice((isANode ? 1 : newSegGeo.components.length - 2),1);
-            //delete the geo point
-            multiaction.doSubAction(new UpdateSegmentGeometry(curSeg, curSeg.geometry, newSegGeo));
+            let newSegGeo = structuredClone(curSeg.attributes.geoJSONGeometry);
+            newSegGeo.coordinates.splice(isANode ? 1 : newSegGeo.coordinates.length - 2, 1);
+            multiaction.doSubAction(new UpdateSegmentGeometry(curSeg, curSeg.attributes.geoJSONGeometry, newSegGeo));
 
             //move the node
             var connectedSegObjs = {};
             var emptyObj = {};
             for(var j=0;j<node.attributes.segIDs.length;j++){
                 var segid = node.attributes.segIDs[j];
-                connectedSegObjs[segid] = W.model.segments.getObjectById(segid).geometry.clone();
+                connectedSegObjs[segid] = structuredClone(W.model.segments.getObjectById(segid).attributes.geoJSONGeometry);
             }
-            multiaction.doSubAction(new MoveNode(node, node.geometry, newNodeGeometry,connectedSegObjs,emptyObj));
+            multiaction.doSubAction(new MoveNode(node, node.attributes.geoJSONGeometry, newNodeGeometry, connectedSegObjs, emptyObj));
 
             if((otherSeg.attributes.revDirection && !curSeg.attributes.revDirection) || (!otherSeg.attributes.revDirection && curSeg.attributes.revDirection))
                     isANode = !isANode;
 
-            let newGeo = otherSeg.geometry.clone();
-            let originalLength = otherSeg.geometry.components.length;
-
-            newGeo.components.splice((isANode ? -1 : 1),0, new OpenLayers.Geometry.Point(currNodePOS.x, currNodePOS.y));
-            newGeo.components[0].calculateBounds();
-            newGeo.components[originalLength].calculateBounds();
-
-            multiaction.doSubAction(new UpdateSegmentGeometry(otherSeg, otherSeg.geometry, newGeo));
-
-
+            let newGeo = structuredClone(otherSeg.attributes.geoJSONGeometry);
+            newGeo.coordinates.splice(isANode ? -1 : 1, 0, [currNodePOS[0], currNodePOS[1]]);
+            
+            multiaction.doSubAction(new UpdateSegmentGeometry(otherSeg, otherSeg.attributes.geoJSONGeometry, newGeo));
             W.model.actionManager.add(multiaction);
 
             if(_settings.RoundaboutAngles)
@@ -685,7 +654,7 @@ normal RA color:#4cc600
             isANode = false;
         //Add geo point on the other segment
         let node = W.model.nodes.getObjectById(nodeID);
-        let currNodePOS = node.geometry.clone();
+        let currNodePOS = structuredClone(node.attributes.geoJSONGeometry.coordinates);
         let otherSeg; //other RA segment that we are adding a geo point to
         let nodeSegs = [...W.model.nodes.getObjectById(nodeID).attributes.segIDs];
         nodeSegs = _.without(nodeSegs, sourceSegID); //remove the source segment from the node Segs - we need to find the segment that is a part of the RA that is after our source seg
@@ -696,44 +665,36 @@ normal RA color:#4cc600
                 break;
             }
         }
-        if(otherSeg.geometry.components.length > 2){
-            let origNodeSegs = [...W.model.nodes.getObjectById(nodeID).attributes.segIDs];
-            let originalLength = otherSeg.geometry.components.length;
 
-            let newSegGeo = curSeg.geometry.clone();
-            newSegGeo.components.splice((isANode ? 1 : newSegGeo.components.length - 1),0, new OpenLayers.Geometry.Point(currNodePOS.x, currNodePOS.y));
-            //delete the geo point
+        if(otherSeg.attributes.geoJSONGeometry.coordinates.length > 2){
+            let newSegGeo = structuredClone(curSeg.attributes.geoJSONGeometry);
+            newSegGeo.coordinates.splice(isANode ? 1 : newSegGeo.coordinates.length - 1, 0, [currNodePOS[0], currNodePOS[1]]);
             var multiaction = new MultiAction();
             multiaction.setModel(W.model);
-            multiaction.doSubAction(new UpdateSegmentGeometry(curSeg, curSeg.geometry, newSegGeo));
+            multiaction.doSubAction(new UpdateSegmentGeometry(curSeg, curSeg.attributes.geoJSONGeometry, newSegGeo));
             if((otherSeg.attributes.revDirection && !curSeg.attributes.revDirection) || (!otherSeg.attributes.revDirection && curSeg.attributes.revDirection))
                 isANode = !isANode;
 
             //note and remove first geo point, move junction node to this point
-            var newNodeGeometry = otherSeg.geometry.components[(isANode ? otherSeg.geometry.components.length - 2 : 1)].clone();
-            newNodeGeometry.calculateBounds();
-            let newGeo = otherSeg.geometry.clone();
-            newGeo.components.splice((isANode ? -2 : 1),1);
-            newGeo.components[0].calculateBounds();
-            newGeo.components[originalLength-2].calculateBounds();
-
-            multiaction.doSubAction(new UpdateSegmentGeometry(otherSeg, otherSeg.geometry, newGeo));
+            var newNodeGeometry = { type: 'Point', coordinates: structuredClone(otherSeg.attributes.geoJSONGeometry.coordinates[isANode ? otherSeg.attributes.geoJSONGeometry.coordinates.length - 2 : 1]) };
+            let newGeo = structuredClone(otherSeg.attributes.geoJSONGeometry);
+            newGeo.coordinates.splice(isANode ? -2 : 1, 1);
+            multiaction.doSubAction(new UpdateSegmentGeometry(otherSeg, otherSeg.attributes.geoJSONGeometry, newGeo));
 
             //move the node
             var connectedSegObjs = {};
             var emptyObj = {};
-            for(var j=0; j < origNodeSegs.length;j++){
-                var segid = origNodeSegs[j];
-                connectedSegObjs[segid] = W.model.segments.getObjectById(segid).geometry.clone();
+            for(var j=0; j < node.attributes.segIDs.length;j++){
+                var segid = node.attributes.segIDs[j];
+                connectedSegObjs[segid] = structuredClone(W.model.segments.getObjectById(segid).attributes.geoJSONGeometry);
             }
-            multiaction.doSubAction(new MoveNode(node, node.geometry, newNodeGeometry,connectedSegObjs,emptyObj));
+            multiaction.doSubAction(new MoveNode(node, node.attributes.geoJSONGeometry, newNodeGeometry, connectedSegObjs, emptyObj));
             W.model.actionManager.add(multiaction);
 
             if(_settings.RoundaboutAngles)
                 DrawRoundaboutAngles();
         }
     }
-
 
     //Left
     function RAShiftLeftBtnClick(e){
