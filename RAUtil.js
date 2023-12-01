@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         WME RA Util
 // @namespace    https://greasyfork.org/users/30701-justins83-waze
-// @version      2023.11.23.01
+// @version      2023.12.01.01
 // @description  Providing basic utility for RA adjustment without the need to delete & recreate
 // @include      https://www.waze.com/editor*
 // @include      https://www.waze.com/*/editor*
@@ -13,6 +13,8 @@
 // @grant        GM_xmlhttpRequest
 // @license      GPLv3
 // @contributionURL https://github.com/WazeDev/Thank-The-Authors
+// @downloadURL https://update.greasyfork.org/scripts/23616/WME%20RA%20Util.user.js
+// @updateURL https://update.greasyfork.org/scripts/23616/WME%20RA%20Util.meta.js
 // ==/UserScript==
 
 /* global W */
@@ -41,7 +43,7 @@ normal RA color:#4cc600
 
     //var totalActions = 0;
     var _settings;
-    const updateMessage = "Fixed for the latest WME update. Now using GeoJSON.";
+    const updateMessage = "Updating for .geometry changes";
 
     function bootstrap(tries = 1) {
 
@@ -797,7 +799,7 @@ normal RA color:#4cc600
         for (var iseg in W.model.segments.objects) {
             let isegment = W.model.segments.getObjectById(iseg);
             var iattributes = isegment.attributes;
-            var iline = isegment.geometry.id;
+            var iline = isegment.getOLGeometry().id;
 
             let irid = iattributes.junctionID;
 
@@ -826,8 +828,8 @@ normal RA color:#4cc600
             nodes = _.uniq(nodes); //remove duplicates
 
             var node_objects = W.model.nodes.getByIds(nodes);
-            nodes_x = node_objects.map(n => n.geometry.x); //get all x locations
-            nodes_y = node_objects.map(n => n.geometry.y); //get all y locations
+            nodes_x = node_objects.map(n => n.getOLGeometry().x); //get all x locations
+            nodes_y = node_objects.map(n => n.getOLGeometry().y); //get all y locations
 
             var sr_x = 0;
             var sr_y = 0;
@@ -839,7 +841,7 @@ normal RA color:#4cc600
                 var ay = nodes_y[0];
 
                 var junction = W.model.junctions.getObjectById(irid);
-                var junction_coords = junction && junction.geometry && junction.geometry.coordinates;
+                var junction_coords = junction && junction.getOLGeometry() && junction.getOLGeometry().coordinates;
 
                 if (junction_coords && junction_coords.length == 2) {
                     //---------- get center point from junction model
@@ -870,7 +872,7 @@ normal RA color:#4cc600
                 else {
                     //---------- simple bounds-based calculation of center point
                     var rbounds = new OpenLayers.Bounds();
-                    rbounds.extend(isegment.geometry.bounds);
+                    rbounds.extend(isegment.getOLGeometry().bounds);
 
                     var center = rbounds.getCenterPixel();
                     sr_x = center.x;
