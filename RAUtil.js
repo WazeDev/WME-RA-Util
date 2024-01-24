@@ -43,7 +43,7 @@ normal RA color:#4cc600
 
     //var totalActions = 0;
     var _settings;
-    const updateMessage = "WME 2.206 compatibility";
+    const updateMessage = "WME 2.206 compatibility. <br><br>Thanks to lacmacca for the update!";
 
     function bootstrap(tries = 1) {
 
