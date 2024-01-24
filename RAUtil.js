@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         WME RA Util
 // @namespace    https://greasyfork.org/users/30701-justins83-waze
-// @version      2023.12.01.01
+// @version      2024.01.24.01
 // @description  Providing basic utility for RA adjustment without the need to delete & recreate
 // @include      https://www.waze.com/editor*
 // @include      https://www.waze.com/*/editor*
@@ -43,7 +43,7 @@ normal RA color:#4cc600
 
     //var totalActions = 0;
     var _settings;
-    const updateMessage = "Updating for .geometry changes";
+    const updateMessage = "WME 2.206 compatibility. <br><br>Thanks to lacmacca for the update!";
 
     function bootstrap(tries = 1) {
 
@@ -382,7 +382,7 @@ normal RA color:#4cc600
         if(checkAllEditable(RASegs)){
             var newGeometry, originalLength;
             var multiaction = new MultiAction();
-            multiaction.setModel(W.model);
+            // multiaction.setModel(W.model);
 
             for(let i=0; i<RASegs.length; i++){
                 segObj = W.model.segments.getObjectById(RASegs[i]);
@@ -392,7 +392,7 @@ normal RA color:#4cc600
                     newGeometry.coordinates[j][1] += latOffset;
                 }
                 //W.model.actionManager.add(new UpdateSegmentGeometry(segObj, segObj.geometry, newGeometry));
-                multiaction.doSubAction(new UpdateSegmentGeometry(segObj, segObj.attributes.geoJSONGeometry, newGeometry));
+                multiaction.doSubAction(W.model, new UpdateSegmentGeometry(segObj, segObj.attributes.geoJSONGeometry, newGeometry));
 
                 var node = W.model.nodes.objects[segObj.attributes.toNodeID];
                 if(segObj.attributes.revDirection)
@@ -407,7 +407,7 @@ normal RA color:#4cc600
                     connectedSegObjs[segid] = structuredClone(W.model.segments.getObjectById(segid).attributes.geoJSONGeometry);
                 }
                 //W.model.actionManager.add(new MoveNode(segObj, segObj.geometry, newNodeGeometry, connectedSegObjs, i));
-                multiaction.doSubAction(new MoveNode(node, node.attributes.geoJSONGeometry, newNodeGeometry, connectedSegObjs, emptyObj));
+                multiaction.doSubAction(W.model, new MoveNode(node, node.attributes.geoJSONGeometry, newNodeGeometry, connectedSegObjs, emptyObj));
                 //W.model.actionManager.add(new MoveNode(node, node.geometry, newNodeGeometry));
                 //totalActions +=2;
             }
@@ -420,7 +420,7 @@ normal RA color:#4cc600
         if(checkAllEditable(RASegs)){
             var newGeometry, originalLength;
             var multiaction = new MultiAction();
-            multiaction.setModel(W.model);
+            // multiaction.setModel(W.model);
 
             //Loop through all RA segments & adjust
             for(let i=0; i<RASegs.length; i++){
@@ -431,7 +431,7 @@ normal RA color:#4cc600
                     newGeometry.coordinates[j][0] += longOffset;
                 }
                 //W.model.actionManager.add(new UpdateSegmentGeometry(segObj, segObj.geometry, newGeometry));
-                multiaction.doSubAction(new UpdateSegmentGeometry(segObj, segObj.attributes.geoJSONGeometry, newGeometry));
+                multiaction.doSubAction(W.model, new UpdateSegmentGeometry(segObj, segObj.attributes.geoJSONGeometry, newGeometry));
 
                 var node = W.model.nodes.objects[segObj.attributes.toNodeID];
                 if(segObj.attributes.revDirection)
@@ -447,7 +447,7 @@ normal RA color:#4cc600
                     connectedSegObjs[segid] = structuredClone(W.model.segments.getObjectById(segid).attributes.geoJSONGeometry);
                 }
                 //W.model.actionManager.add(new MoveNode(node, node.geometry, newNodeGeometry));
-                multiaction.doSubAction(new MoveNode(node, node.attributes.geoJSONGeometry, newNodeGeometry, connectedSegObjs, emptyObj));
+                multiaction.doSubAction(W.model, new MoveNode(node, node.attributes.geoJSONGeometry, newNodeGeometry, connectedSegObjs, emptyObj));
                 //totalActions +=2;
             }
             W.model.actionManager.add(multiaction);
@@ -462,12 +462,12 @@ normal RA color:#4cc600
 
     function RotateRA(segObj, angle){
         var RASegs = WazeWrap.Model.getAllRoundaboutSegmentsFromObj(segObj);
-        var raCenter = W.model.junctions.objects[WazeWrap.Model.getObjectModel(segObj).attributes.junctionID].attributes.geoJSONGeometry.coordinates;
+        var raCenter = W.model.junctions.objects[segObj.WW.getAttributes().junctionID].attributes.geoJSONGeometry.coordinates;
 
         if(checkAllEditable(RASegs)){
             var gps, newGeometry, originalLength;
             var multiaction = new MultiAction();
-            multiaction.setModel(W.model);
+            // multiaction.setModel(W.model);
 
             //Loop through all RA segments & adjust
             for(let i=0; i<RASegs.length; i++){
@@ -488,7 +488,7 @@ normal RA color:#4cc600
                 }
 
                 //W.model.actionManager.add(new UpdateSegmentGeometry(segObj, segObj.geometry, newGeometry));
-                multiaction.doSubAction(new UpdateSegmentGeometry(segObj, segObj.attributes.geoJSONGeometry, newGeometry));
+                multiaction.doSubAction(W.model, new UpdateSegmentGeometry(segObj, segObj.attributes.geoJSONGeometry, newGeometry));
 
                 //**************Rotate Nodes******************
                 var node = W.model.nodes.objects[segObj.attributes.toNodeID];
@@ -511,7 +511,7 @@ normal RA color:#4cc600
                     var segid = node.attributes.segIDs[j];
                     connectedSegObjs[segid] = structuredClone(W.model.segments.getObjectById(segid).attributes.geoJSONGeometry);
                 }
-                multiaction.doSubAction(new MoveNode(node, node.attributes.geoJSONGeometry, newNodeGeometry, connectedSegObjs, emptyObj));
+                multiaction.doSubAction(W.model, new MoveNode(node, node.attributes.geoJSONGeometry, newNodeGeometry, connectedSegObjs, emptyObj));
                 //totalActions +=2;
             }
             W.model.actionManager.add(multiaction);
@@ -533,7 +533,7 @@ normal RA color:#4cc600
 
     function ChangeDiameter(segObj, amount){
         var RASegs = WazeWrap.Model.getAllRoundaboutSegmentsFromObj(segObj);
-        var raCenter = W.model.junctions.objects[WazeWrap.Model.getObjectModel(segObj).attributes.junctionID].attributes.geoJSONGeometry.coordinates;
+        var raCenter = W.model.junctions.objects[segObj.WW.getAttributes().junctionID].attributes.geoJSONGeometry.coordinates;
         let { lon: centerX, lat: centerY } = WazeWrap.Geometry.ConvertTo900913(raCenter);
 
         if(checkAllEditable(RASegs)){
@@ -618,13 +618,13 @@ normal RA color:#4cc600
             }
 
             var multiaction = new MultiAction();
-            multiaction.setModel(W.model);
+            // multiaction.setModel(W.model);
             //note and remove first geo point, move junction node to this point
             var newNodeGeometry = { type: 'Point', coordinates: structuredClone(curSeg.attributes.geoJSONGeometry.coordinates[isANode ? 1 : curSeg.attributes.geoJSONGeometry.coordinates.length - 2]) };
 
             let newSegGeo = structuredClone(curSeg.attributes.geoJSONGeometry);
             newSegGeo.coordinates.splice(isANode ? 1 : newSegGeo.coordinates.length - 2, 1);
-            multiaction.doSubAction(new UpdateSegmentGeometry(curSeg, curSeg.attributes.geoJSONGeometry, newSegGeo));
+            multiaction.doSubAction(W.model, new UpdateSegmentGeometry(curSeg, curSeg.attributes.geoJSONGeometry, newSegGeo));
 
             //move the node
             var connectedSegObjs = {};
@@ -633,7 +633,7 @@ normal RA color:#4cc600
                 var segid = node.attributes.segIDs[j];
                 connectedSegObjs[segid] = structuredClone(W.model.segments.getObjectById(segid).attributes.geoJSONGeometry);
             }
-            multiaction.doSubAction(new MoveNode(node, node.attributes.geoJSONGeometry, newNodeGeometry, connectedSegObjs, emptyObj));
+            multiaction.doSubAction(W.model, new MoveNode(node, node.attributes.geoJSONGeometry, newNodeGeometry, connectedSegObjs, emptyObj));
 
             if((otherSeg.attributes.revDirection && !curSeg.attributes.revDirection) || (!otherSeg.attributes.revDirection && curSeg.attributes.revDirection))
                     isANode = !isANode;
@@ -641,7 +641,7 @@ normal RA color:#4cc600
             let newGeo = structuredClone(otherSeg.attributes.geoJSONGeometry);
             newGeo.coordinates.splice(isANode ? -1 : 1, 0, [currNodePOS[0], currNodePOS[1]]);
             
-            multiaction.doSubAction(new UpdateSegmentGeometry(otherSeg, otherSeg.attributes.geoJSONGeometry, newGeo));
+            multiaction.doSubAction(W.model, new UpdateSegmentGeometry(otherSeg, otherSeg.attributes.geoJSONGeometry, newGeo));
             W.model.actionManager.add(multiaction);
 
             if(_settings.RoundaboutAngles)
@@ -672,8 +672,8 @@ normal RA color:#4cc600
             let newSegGeo = structuredClone(curSeg.attributes.geoJSONGeometry);
             newSegGeo.coordinates.splice(isANode ? 1 : newSegGeo.coordinates.length - 1, 0, [currNodePOS[0], currNodePOS[1]]);
             var multiaction = new MultiAction();
-            multiaction.setModel(W.model);
-            multiaction.doSubAction(new UpdateSegmentGeometry(curSeg, curSeg.attributes.geoJSONGeometry, newSegGeo));
+            // multiaction.setModel(W.model);
+            multiaction.doSubAction(W.model, new UpdateSegmentGeometry(curSeg, curSeg.attributes.geoJSONGeometry, newSegGeo));
             if((otherSeg.attributes.revDirection && !curSeg.attributes.revDirection) || (!otherSeg.attributes.revDirection && curSeg.attributes.revDirection))
                 isANode = !isANode;
 
@@ -681,7 +681,7 @@ normal RA color:#4cc600
             var newNodeGeometry = { type: 'Point', coordinates: structuredClone(otherSeg.attributes.geoJSONGeometry.coordinates[isANode ? otherSeg.attributes.geoJSONGeometry.coordinates.length - 2 : 1]) };
             let newGeo = structuredClone(otherSeg.attributes.geoJSONGeometry);
             newGeo.coordinates.splice(isANode ? -2 : 1, 1);
-            multiaction.doSubAction(new UpdateSegmentGeometry(otherSeg, otherSeg.attributes.geoJSONGeometry, newGeo));
+            multiaction.doSubAction(W.model, new UpdateSegmentGeometry(otherSeg, otherSeg.attributes.geoJSONGeometry, newGeo));
 
             //move the node
             var connectedSegObjs = {};
@@ -690,7 +690,7 @@ normal RA color:#4cc600
                 var segid = node.attributes.segIDs[j];
                 connectedSegObjs[segid] = structuredClone(W.model.segments.getObjectById(segid).attributes.geoJSONGeometry);
             }
-            multiaction.doSubAction(new MoveNode(node, node.attributes.geoJSONGeometry, newNodeGeometry, connectedSegObjs, emptyObj));
+            multiaction.doSubAction(W.model, new MoveNode(node, node.attributes.geoJSONGeometry, newNodeGeometry, connectedSegObjs, emptyObj));
             W.model.actionManager.add(multiaction);
 
             if(_settings.RoundaboutAngles)
@@ -705,7 +705,7 @@ normal RA color:#4cc600
 
         //if(!pendingChanges){
         var segObj = WazeWrap.getSelectedFeatures()[0];
-        var convertedCoords = WazeWrap.Geometry.ConvertTo4326(segObj.geometry.components[0].x, segObj.geometry.components[0].y);
+        var convertedCoords = WazeWrap.Geometry.ConvertTo4326(segObj.WW.getAttributes().geoJSONGeometry.coordinates[0][0], segObj.WW.getAttributes().geoJSONGeometry.coordinates[0][1]);
         var gpsOffsetAmount = WazeWrap.Geometry.CalculateLongOffsetGPS(-$('#shiftAmount').val(), convertedCoords.lon, convertedCoords.lat);
         ShiftSegmentsNodesLong(segObj, gpsOffsetAmount);
         //}
@@ -717,7 +717,7 @@ normal RA color:#4cc600
 
         //if(!pendingChanges){
         var segObj = WazeWrap.getSelectedFeatures()[0];
-        var convertedCoords = WazeWrap.Geometry.ConvertTo4326(segObj.geometry.components[0].x, segObj.geometry.components[0].y);
+        var convertedCoords = WazeWrap.Geometry.ConvertTo4326(segObj.WW.getAttributes().geoJSONGeometry.coordinates[0][0], segObj.WW.getAttributes().geoJSONGeometry.coordinates[0][1]);
         var gpsOffsetAmount = WazeWrap.Geometry.CalculateLongOffsetGPS($('#shiftAmount').val(), convertedCoords.lon, convertedCoords.lat);
         ShiftSegmentsNodesLong(segObj, gpsOffsetAmount);
         //}
@@ -729,7 +729,7 @@ normal RA color:#4cc600
 
         //if(!pendingChanges){
         var segObj = WazeWrap.getSelectedFeatures()[0];
-        var gpsOffsetAmount = WazeWrap.Geometry.CalculateLatOffsetGPS($('#shiftAmount').val(), WazeWrap.Geometry.ConvertTo4326(segObj.geometry.components[0].x, segObj.geometry.components[0].y));
+        var gpsOffsetAmount = WazeWrap.Geometry.CalculateLatOffsetGPS($('#shiftAmount').val(), WazeWrap.Geometry.ConvertTo4326(segObj.WW.getAttributes().geoJSONGeometry.coordinates[0][0], segObj.WW.getAttributes().geoJSONGeometry.coordinates[0][1]));
         ShiftSegmentNodesLat(segObj, gpsOffsetAmount);
         //}
     }
@@ -740,7 +740,7 @@ normal RA color:#4cc600
 
         //if(!pendingChanges){
         var segObj = WazeWrap.getSelectedFeatures()[0];
-        var gpsOffsetAmount = WazeWrap.Geometry.CalculateLatOffsetGPS(-$('#shiftAmount').val(), WazeWrap.Geometry.ConvertTo4326(segObj.geometry.components[0].x, segObj.geometry.components[0].y));
+        var gpsOffsetAmount = WazeWrap.Geometry.CalculateLatOffsetGPS(-$('#shiftAmount').val(), WazeWrap.Geometry.ConvertTo4326(segObj.WW.getAttributes().geoJSONGeometry.coordinates[0][0], segObj.WW.getAttributes().geoJSONGeometry.coordinates[0][1]));
         ShiftSegmentNodesLat(segObj, gpsOffsetAmount);
         //}
     }
