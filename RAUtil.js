@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         WME RA Util
 // @namespace    https://greasyfork.org/users/30701-justins83-waze
-// @version      2024.01.24.01
+// @version      2024.04.18.01
 // @description  Providing basic utility for RA adjustment without the need to delete & recreate
 // @include      https://www.waze.com/editor*
 // @include      https://www.waze.com/*/editor*
@@ -43,7 +43,7 @@ normal RA color:#4cc600
 
     //var totalActions = 0;
     var _settings;
-    const updateMessage = "WME 2.206 compatibility. <br><br>Thanks to lacmacca for the update!";
+    const updateMessage = "Fixed roundabouts from slowly transforming into ovals when rotating.";
 
     function bootstrap(tries = 1) {
 
@@ -455,9 +455,27 @@ normal RA color:#4cc600
     }
 
     function rotatePoints(origin, points, angle){
-        var lineFeature = new OpenLayers.Feature.Vector(new OpenLayers.Geometry.LineString(points),null,null);
-        lineFeature.geometry.rotate(angle, new OpenLayers.Geometry.Point(origin[0], origin[1]));
-        return [].concat(lineFeature.geometry.components);
+        let angleRadians = angle * Math.PI / 180;
+        let {lon: centerLon, lat: centerLat} = WazeWrap.Geometry.ConvertTo900913(origin[0], origin[1]);
+        let center = new OpenLayers.Geometry.Point(centerLon, centerLat);
+
+        for (let point of points) {
+            let {lon: pointLon, lat: pointLat} = WazeWrap.Geometry.ConvertTo900913(point.x, point.y);
+            point.x = pointLon;
+            point.y = pointLat;
+
+            let distance = point.distanceTo(center);
+            let newAngleRadians = angleRadians + Math.atan2(point.y - center.y, point.x - center.x);
+            point.x = center.x + distance * Math.cos(newAngleRadians);
+            point.y = center.y + distance * Math.sin(newAngleRadians);
+            
+            let {lon: newPointLon, lat: newPointLat} = WazeWrap.Geometry.ConvertTo4326(point.x, point.y);
+            point.x = newPointLon;
+            point.y = newPointLat;
+            point.clearBounds();
+        }
+
+        return points;
     }
 
     function RotateRA(segObj, angle){
