@@ -39,7 +39,7 @@ normal RA color:#4cc600
 	let wEvents;
     const SCRIPT_VERSION = GM_info.script.version.toString();
     const SCRIPT_NAME = GM_info.script.name;
-    const DOWNLOAD_URL = GM_info.scriptUpdateURL;
+    const DOWNLOAD_URL = GM_info.script.downloadURL;
 
     //var totalActions = 0;
     var _settings;
