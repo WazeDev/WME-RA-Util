@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         WME RA Util
 // @namespace    https://greasyfork.org/users/30701-justins83-waze
-// @version      2024.04.18.01
+// @version      2024.05.14.01
 // @description  Providing basic utility for RA adjustment without the need to delete & recreate
 // @include      https://www.waze.com/editor*
 // @include      https://www.waze.com/*/editor*
@@ -43,7 +43,7 @@ normal RA color:#4cc600
 
     //var totalActions = 0;
     var _settings;
-    const updateMessage = "Fixed roundabouts from slowly transforming into ovals when rotating.";
+    const updateMessage = "Fixed roundabouts transforming into ovals when rotating. <br>Added diameter step size.<br><br>";
 
     function bootstrap(tries = 1) {
 
@@ -97,8 +97,8 @@ normal RA color:#4cc600
         RAUtilWindow.style.padding = '4px';
 
         var alertsHTML = '<div id="header" style="padding: 4px; background-color:#92C3D3; border-radius: 5px;-moz-border-radius: 5px;-webkit-border-radius: 5px; color: white; font-weight: bold; text-align:center; letter-spacing: 1px;text-shadow: black 0.1em 0.1em 0.2em;"><img src="https://storage.googleapis.com/wazeopedia-files/1/1e/RA_Util.png" style="float:left"></img> Roundabout Utility <a data-toggle="collapse" href="#divWrappers" id="collapserLink" style="float:right"><span id="collapser" style="cursor:pointer;padding:2px;color:white;" class="fa fa-caret-square-o-up"></a></span></div>';
-        // start collapse // I put it al the beginning
-      alertsHTML += '<div id="divWrappers" class="collapse in">';
+         // start collapse // I put it al the beginning
+         alertsHTML += '<div id="divWrappers" class="collapse in">';
          //***************** Round About Angles **************************
          alertsHTML += '<p style="margin: 10px 0px 0px 20px;"><input type="checkbox" id="chkRARoundaboutAngles">&nbsp;Enable Roundabout Angles</p>';
          //***************** Shift Amount **************************
@@ -147,7 +147,7 @@ normal RA color:#4cc600
          //********************* Diameter change ******************
          // Define BOX
          alertsHTML += '<div id="diameterChange" style="float:left; text-align: center;width: 120px;max-width: 24%;max-height:145px;margin: 1em auto;opacity:1;border-radius: 2px;-moz-border-radius: 2px;-webkit-border-radius: 4px;border-width:1px;border-style:solid;border-color:#92C3D3;padding:2px;  display:inline-block; border-style:solid; border-width:1px; height:152px;  margin-right:5px;">';
-         alertsHTML += '<b>Change diameter</b></br></br>';
+         alertsHTML += '<b>Change diameter</b></br><input type="text" name="diameterAmount" id="diameterAmount" size="1" style="float: left; text-align: center;font: inherit; line-height: normal; width: 30px; height: 20px; margin: 5px 4px; box-sizing: border-box; display: block; padding-left: 0; border-bottom-color: rgba(black,.3); background: transparent; outline: none; color: black;" value="1"/> <div style="margin: 5px 4px;">Meter(s)';
               // Diameter Change controls
             alertsHTML += '<div id="DiameterChangeControls" style="padding: 6px 4px;width=100px; margin: 5px 7px 50px 7px;align:center;">';
                // Decrease Button
@@ -160,7 +160,7 @@ normal RA color:#4cc600
                alertsHTML += '<i class="fa fa-arrows-alt fa-2x" style="color: white; text-shadow: black 0.1em 0.1em 0.2em; padding:2px;"> </i>';
                alertsHTML += '<span id="diameterChangeIncreaseCaption" style="font-weight: bold;"></span>';
                alertsHTML += '</span>';
-         alertsHTML += '</div></div>';
+         alertsHTML += '</div></div></div>';
          //***************** Bump nodes **********************
          // Define BOX
          alertsHTML += '<div id="bumpNodes" style="float:left; text-align: center;width: 120px;max-width: 24%;max-height:145px;margin: 1em auto 0px auto;opacity:1;border-radius: 2px;-moz-border-radius: 2px;-webkit-border-radius: 4px;border-width:1px;border-style:solid;border-color:#92C3D3;padding:2px;  display:inline-block; border-style:solid; border-width:1px; height:152px;  margin-right:5px;">';
@@ -209,6 +209,11 @@ normal RA color:#4cc600
         });
 
         $('#rotationAmount').keypress(function(event) {
+            if ((event.which != 46 || $(this).val().indexOf('.') != -1) && (event.which < 48 || event.which > 57))
+                event.preventDefault();
+        });
+
+        $('#diameterAmount').keypress(function(event) {
             if ((event.which != 46 || $(this).val().indexOf('.') != -1) && (event.which < 48 || event.which > 57))
                 event.preventDefault();
         });
@@ -606,13 +611,13 @@ normal RA color:#4cc600
     function diameterChangeDecreaseBtnClick(e){
         e.stopPropagation();
         var segObj = WazeWrap.getSelectedFeatures()[0];
-        ChangeDiameter(segObj, -1);
+        ChangeDiameter(segObj, -$('#diameterAmount').val() / 2);
     }
 
     function diameterChangeIncreaseBtnClick(e){
         e.stopPropagation();
         var segObj = WazeWrap.getSelectedFeatures()[0];
-        ChangeDiameter(segObj, 1);
+        ChangeDiameter(segObj, +$('#diameterAmount').val() / 2);
     }
 
     function moveNodeIn(sourceSegID, nodeID){
