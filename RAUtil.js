@@ -384,7 +384,7 @@ normal RA color:#4cc600
             $RAEditable.remove();
         else{
             if($RAEditable.length === 0){
-                $RAEditable = $('<div>', {id:'RAEditable', style:'color:red'});
+                $RAEditable = $('<div>', {id:'RAEditable', style:'color:red;float:left;'});
                 $RAEditable.text('One or more segments are locked above your rank or have a closure.');
                 $('#RAUtilWindow').append($RAEditable);
             }
