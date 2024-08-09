@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         WME RA Util
 // @namespace    https://greasyfork.org/users/30701-justins83-waze
-// @version      2024.01.24.01
+// @version      2024.08.10.01
 // @description  Providing basic utility for RA adjustment without the need to delete & recreate
 // @include      https://www.waze.com/editor*
 // @include      https://www.waze.com/*/editor*
@@ -43,7 +43,7 @@ normal RA color:#4cc600
 
     //var totalActions = 0;
     var _settings;
-    const updateMessage = "WME 2.206 compatibility. <br><br>Thanks to lacmacca for the update!";
+    const updateMessage = "Now you can change the shape of the roundabout between a circle & oval. Thanks to 93ben (maporaptor).";
 
     function bootstrap(tries = 1) {
 
@@ -87,7 +87,7 @@ normal RA color:#4cc600
         RAUtilWindow.style.visibility = 'hidden';
         RAUtilWindow.style.top = '15%';
         RAUtilWindow.style.left = '25%';
-        RAUtilWindow.style.width = '510px';
+        RAUtilWindow.style.width = '650px';
         RAUtilWindow.style.zIndex = 100;
         RAUtilWindow.style.backgroundColor = '#FFFFFE';
         RAUtilWindow.style.borderWidth = '0px';
@@ -144,6 +144,25 @@ normal RA color:#4cc600
                alertsHTML += '<i class="fa fa-repeat fa-2x" style="color: white; text-shadow: black 0.1em 0.1em 0.2em; padding:2px;"> </i>';
                alertsHTML += '<span id="RotateRightBtnCaption" style="font-weight: bold;"></span>';
          alertsHTML += '</div></div></div>';
+         //***************** Toggle shape **************************
+         // Define BOX
+         alertsHTML += '<div id="toggleShape" style="text-align:center;float:left; width: 135px;max-width: 24%;height: 145px;margin: 1em 5px 0px 0px;opacity:1;border-radius: 2px;-moz-border-radius: 2px;-webkit-border-radius: 4px;border-width:1px;border-style:solid;border-color:#92C3D3;}">';
+         alertsHTML += '<b>Toggle shape</b></br></br>';
+            // Toggle Shape Change controls
+            alertsHTML += '<div id="ShapeChangeControls" style="width:135px;text-align:center;padding:6px;">';
+               // Circle Button
+               alertsHTML += '<span id="toggleShape-circle" title="Circle" style="float:left;display:inline-flex; align-items: center; justify-content:center; width:40px; height:40px; background-color:#92C3D3; cursor:pointer; font-size:14px; border:thin outset black; border-style:solid; border-width: 1px;border-radius: 50%;-moz-border-radius: 50%;-webkit-border-radius: 50%;box-shadow: inset 0px 0px 20px -14px rgba(0,0,0,1);-moz-box-shadow: inset 0px 0px 20px -14px rgba(0,0,0,1);-webkit-box-shadow: inset 0px 0px 20px -14px rgba(0,0,0,1);">';
+               alertsHTML += '<span style="color: white; font-weight:900; font-size:25px; text-shadow: black 0.1em 0.1em 0.3em;">◯</span>';
+               alertsHTML += '</span>';
+               // Horizontal Oval Button
+               alertsHTML += '<span id="toggleShape-hOval" title="Horizontal Oval" style="display:inline-flex; align-items: center; justify-content:center; width:40px; height:40px; background-color:#92C3D3; cursor:pointer; font-size:14px; border:thin outset black; border-style:solid; border-width: 1px;border-radius: 50%;-moz-border-radius: 50%;-webkit-border-radius: 50%;box-shadow: inset 0px 0px 20px -14px rgba(0,0,0,1);-moz-box-shadow: inset 0px 0px 20px -14px rgba(0,0,0,1);-webkit-box-shadow: inset 0px 0px 20px -14px rgba(0,0,0,1);">';
+               alertsHTML += '<span style="color: white; font-weight:900; font-size:25px; text-shadow: black 0.1em 0.1em 0.3em;">⬭</span>';
+               alertsHTML += '</span>';
+               // Vertical Oval Button
+               alertsHTML += '<span id="toggleShape-vOval" title="Vertical Oval" style="float:right; display:inline-flex; align-items: center; justify-content:center; width:40px; height:40px; background-color:#92C3D3; cursor:pointer; font-size:14px; border:thin outset black; border-style:solid; border-width: 1px;border-radius: 50%;-moz-border-radius: 50%;-webkit-border-radius: 50%;box-shadow: inset 0px 0px 20px -14px rgba(0,0,0,1);-moz-box-shadow: inset 0px 0px 20px -14px rgba(0,0,0,1);-webkit-box-shadow: inset 0px 0px 20px -14px rgba(0,0,0,1);">';
+               alertsHTML += '<span style="color: white; font-weight:900; font-size:20px; text-shadow: black 0.1em 0.1em 0.3em;">⬯</span>';
+               alertsHTML += '</span>';
+        alertsHTML += '</div></div>';
          //********************* Diameter change ******************
          // Define BOX
          alertsHTML += '<div id="diameterChange" style="float:left; text-align: center;width: 120px;max-width: 24%;max-height:145px;margin: 1em auto;opacity:1;border-radius: 2px;-moz-border-radius: 2px;-webkit-border-radius: 4px;border-width:1px;border-style:solid;border-color:#92C3D3;padding:2px;  display:inline-block; border-style:solid; border-width:1px; height:152px;  margin-right:5px;">';
@@ -152,7 +171,7 @@ normal RA color:#4cc600
             alertsHTML += '<div id="DiameterChangeControls" style="padding: 6px 4px;width=100px; margin: 5px 7px 50px 7px;align:center;">';
                // Decrease Button
                alertsHTML += '<span id="diameterChangeDecreaseBtn" style="float: left; width=45px; height=45px; background-color:#92C3D3; cursor:pointer; padding: 5px; font-size:14px; border:thin outset black; border-style:solid; border-width: 1px;border-radius: 50%;-moz-border-radius: 50%;-webkit-border-radius: 50%;box-shadow: inset 0px 0px 20px -14px rgba(0,0,0,1);-moz-box-shadow: inset 0px 0px 20px -14px rgba(0,0,0,1);-webkit-box-shadow: inset 0px 0px 20px -14px rgba(0,0,0,1);">';
-               alertsHTML += '<i class="fa fa-compress fa-2x" style="color: white; text-shadow: black 0.1em 0.1em 0.2em; padding:2px;;"> </i>';
+               alertsHTML += '<i class="fa fa-compress fa-2x" style="color: white; text-shadow: black 0.1em 0.1em 0.2em; padding:2px;"> </i>';
                alertsHTML += '<span id="diameterChangeDecreaseCaption" style="font-weight: bold;"></span>';
                alertsHTML += '</span>';
                // Increase Button
@@ -194,6 +213,10 @@ normal RA color:#4cc600
 
         $('#RARotateLeftBtn').click(RARotateLeftBtnClick);
         $('#RARotateRightBtn').click(RARotateRightBtnClick);
+
+        $('#toggleShape-circle').click(toggleShapeCircle);
+        $('#toggleShape-hOval').click(toggleShapehOval);
+        $('#toggleShape-vOval').click(toggleShapevOval);
 
         $('#diameterChangeDecreaseBtn').click(diameterChangeDecreaseBtnClick);
         $('#diameterChangeIncreaseBtn').click(diameterChangeIncreaseBtnClick);
@@ -531,6 +554,119 @@ normal RA color:#4cc600
         RotateRA(segObj, -$('#rotationAmount').val());
     }
 
+    function ChangeShape(segObj, shapeType = 'circle', ovalRatio = 1.5) {
+        const validShapeTypes = ['circle', 'horizontalOval', 'verticalOval'];
+        if (!validShapeTypes.includes(shapeType)) {
+            console.error(`Invalid shapeType: ${shapeType}. Valid options are ${validShapeTypes.join(', ')}`);
+            return;
+        }
+
+        const RASegs = WazeWrap.Model.getAllRoundaboutSegmentsFromObj(segObj);
+        const raCenter = W.model.junctions.objects[segObj.WW.getAttributes().junctionID].attributes.geoJSONGeometry.coordinates;
+        let { lon: centerX, lat: centerY } = WazeWrap.Geometry.ConvertTo900913(raCenter);
+
+        if (checkAllEditable(RASegs)) {
+            let minX = Number.POSITIVE_INFINITY, maxX = Number.NEGATIVE_INFINITY;
+            let minY = Number.POSITIVE_INFINITY, maxY = Number.NEGATIVE_INFINITY;
+
+            // Calculate bounding box
+            for (let i = 0; i < RASegs.length; i++) {
+                segObj = W.model.segments.getObjectById(RASegs[i]);
+                const coords = segObj.attributes.geoJSONGeometry.coordinates;
+                for (let j = 1; j < coords.length - 1; j++) {
+                    let { lon: pointX, lat: pointY } = WazeWrap.Geometry.ConvertTo900913(coords[j]);
+                    minX = Math.min(minX, pointX);
+                    maxX = Math.max(maxX, pointX);
+                    minY = Math.min(minY, pointY);
+                    maxY = Math.max(maxY, pointY);
+                }
+            }
+
+            // Dimensions
+            const width = maxX - minX;
+            const height = maxY - minY;
+            const averageRadius = Math.min(width, height) / 2;
+
+            // Determine current shape
+            const currentRatio = width / height;
+            const isCircle = Math.abs(currentRatio - 1) < 0.01;
+            const isHorizontalOval = currentRatio > 1;
+            const isVerticalOval = currentRatio < 1;
+
+            // Determine desired shape ratios
+            let xRatio = 1, yRatio = 1;
+            if (shapeType === 'circle') {
+                if (isCircle) return; // No changes needed
+                xRatio = averageRadius / (width / 2);
+                yRatio = averageRadius / (height / 2);
+            } else if (shapeType === 'horizontalOval') {
+                if (isHorizontalOval && Math.abs(ovalRatio - currentRatio) < 0.01) return; // No changes needed
+                xRatio = ovalRatio;
+                yRatio = 1 / ovalRatio;
+            } else if (shapeType === 'verticalOval') {
+                if (isVerticalOval && Math.abs(ovalRatio - (1 / currentRatio)) < 0.01) return; // No changes needed
+                xRatio = 1 / ovalRatio;
+                yRatio = ovalRatio;
+            }
+
+            // Resize the coordinates to match the new shape
+            for (let i = 0; i < RASegs.length; i++) {
+                segObj = W.model.segments.getObjectById(RASegs[i]);
+                const newGeometry = structuredClone(segObj.attributes.geoJSONGeometry);
+                const coords = segObj.attributes.geoJSONGeometry.coordinates;
+                for (let j = 1; j < coords.length - 1; j++) {
+                    let { lon: pointX, lat: pointY } = WazeWrap.Geometry.ConvertTo900913(coords[j]);
+                    const dx = pointX - centerX;
+                    const dy = pointY - centerY;
+                    const newX = centerX + dx * xRatio;
+                    const newY = centerY + dy * yRatio;
+                    const { lon: finalX, lat: finalY } = WazeWrap.Geometry.ConvertTo4326([newX, newY]);
+                    newGeometry.coordinates[j] = [finalX, finalY];
+                }
+                W.model.actionManager.add(new UpdateSegmentGeometry(segObj, segObj.attributes.geoJSONGeometry, newGeometry));
+
+                // Adjust node positions
+                const node = W.model.nodes.objects[segObj.attributes.toNodeID] || W.model.nodes.objects[segObj.attributes.fromNodeID];
+                const newNodeGeometry = structuredClone(node.attributes.geoJSONGeometry);
+                let { lon: pointX, lat: pointY } = WazeWrap.Geometry.ConvertTo900913(newNodeGeometry.coordinates);
+                const dx = pointX - centerX;
+                const dy = pointY - centerY;
+                const newX = centerX + dx * xRatio;
+                const newY = centerY + dy * yRatio;
+                const { lon: finalX, lat: finalY } = WazeWrap.Geometry.ConvertTo4326([newX, newY]);
+                newNodeGeometry.coordinates = [finalX, finalY];
+                const connectedSegObjs = {};
+                const emptyObj = {};
+                node.attributes.segIDs.forEach(segid => {
+                    connectedSegObjs[segid] = structuredClone(W.model.segments.getObjectById(segid).attributes.geoJSONGeometry);
+                });
+                W.model.actionManager.add(new MoveNode(node, node.attributes.geoJSONGeometry, newNodeGeometry, connectedSegObjs, emptyObj));
+            }
+
+            if (_settings.RoundaboutAngles) {
+                DrawRoundaboutAngles();
+            }
+        }
+    }
+
+    function toggleShapeCircle(e){
+        e.stopPropagation();
+        var segObj = WazeWrap.getSelectedFeatures()[0];
+        ChangeShape(segObj, 'circle');
+    }
+
+        function toggleShapehOval(e){
+        e.stopPropagation();
+        var segObj = WazeWrap.getSelectedFeatures()[0];
+        ChangeShape(segObj, 'horizontalOval', 1.5);
+    }
+            function toggleShapevOval(e){
+        e.stopPropagation();
+        var segObj = WazeWrap.getSelectedFeatures()[0];
+        ChangeShape(segObj, 'verticalOval', 1.5);
+    }
+
+
     function ChangeDiameter(segObj, amount){
         var RASegs = WazeWrap.Model.getAllRoundaboutSegmentsFromObj(segObj);
         var raCenter = W.model.junctions.objects[segObj.WW.getAttributes().junctionID].attributes.geoJSONGeometry.coordinates;
@@ -640,7 +776,7 @@ normal RA color:#4cc600
 
             let newGeo = structuredClone(otherSeg.attributes.geoJSONGeometry);
             newGeo.coordinates.splice(isANode ? -1 : 1, 0, [currNodePOS[0], currNodePOS[1]]);
-            
+
             multiaction.doSubAction(W.model, new UpdateSegmentGeometry(otherSeg, otherSeg.attributes.geoJSONGeometry, newGeo));
             W.model.actionManager.add(multiaction);
 
@@ -1030,4 +1166,3 @@ normal RA color:#4cc600
     }
 
 })();
-
