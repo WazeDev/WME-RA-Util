@@ -97,8 +97,8 @@ normal RA color:#4cc600
         RAUtilWindow.style.padding = '4px';
 
         var alertsHTML = '<div id="header" style="padding: 4px; background-color:#92C3D3; border-radius: 5px;-moz-border-radius: 5px;-webkit-border-radius: 5px; color: white; font-weight: bold; text-align:center; letter-spacing: 1px;text-shadow: black 0.1em 0.1em 0.2em;"><img src="https://storage.googleapis.com/wazeopedia-files/1/1e/RA_Util.png" style="float:left"></img> Roundabout Utility <a data-toggle="collapse" href="#divWrappers" id="collapserLink" style="float:right"><span id="collapser" style="cursor:pointer;padding:2px;color:white;" class="fa fa-caret-square-o-up"></a></span></div>';
-         // start collapse // I put it al the beginning
-         alertsHTML += '<div id="divWrappers" class="collapse in">';
+        // start collapse // I put it al the beginning
+        alertsHTML += '<div id="divWrappers" class="collapse in">';
          //***************** Round About Angles **************************
          alertsHTML += '<p style="margin: 10px 0px 0px 20px;"><input type="checkbox" id="chkRARoundaboutAngles">&nbsp;Enable Roundabout Angles</p>';
          //***************** Shift Amount **************************
