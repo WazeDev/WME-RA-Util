@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         WME RA Util
 // @namespace    https://greasyfork.org/users/30701-justins83-waze
-// @version      2024.05.14.01
+// @version      2024.10.15.01
 // @description  Providing basic utility for RA adjustment without the need to delete & recreate
 // @include      https://www.waze.com/editor*
 // @include      https://www.waze.com/*/editor*
@@ -43,7 +43,7 @@ normal RA color:#4cc600
 
     //var totalActions = 0;
     var _settings;
-    const updateMessage = "Fixed roundabouts transforming into ovals when rotating. <br>Added diameter step size.<br><br>";
+    const updateMessage = "Fixed roundabouts transforming into ovals when rotating.";
 
     function bootstrap(tries = 1) {
 
@@ -147,7 +147,7 @@ normal RA color:#4cc600
          //********************* Diameter change ******************
          // Define BOX
          alertsHTML += '<div id="diameterChange" style="float:left; text-align: center;width: 120px;max-width: 24%;max-height:145px;margin: 1em auto;opacity:1;border-radius: 2px;-moz-border-radius: 2px;-webkit-border-radius: 4px;border-width:1px;border-style:solid;border-color:#92C3D3;padding:2px;  display:inline-block; border-style:solid; border-width:1px; height:152px;  margin-right:5px;">';
-         alertsHTML += '<b>Change diameter</b></br><input type="text" name="diameterAmount" id="diameterAmount" size="1" style="float: left; text-align: center;font: inherit; line-height: normal; width: 30px; height: 20px; margin: 5px 4px; box-sizing: border-box; display: block; padding-left: 0; border-bottom-color: rgba(black,.3); background: transparent; outline: none; color: black;" value="1"/> <div style="margin: 5px 4px;">Meter(s)';
+         alertsHTML += '<b>Change diameter</b></br></br>';
               // Diameter Change controls
             alertsHTML += '<div id="DiameterChangeControls" style="padding: 6px 4px;width=100px; margin: 5px 7px 50px 7px;align:center;">';
                // Decrease Button
@@ -160,7 +160,7 @@ normal RA color:#4cc600
                alertsHTML += '<i class="fa fa-arrows-alt fa-2x" style="color: white; text-shadow: black 0.1em 0.1em 0.2em; padding:2px;"> </i>';
                alertsHTML += '<span id="diameterChangeIncreaseCaption" style="font-weight: bold;"></span>';
                alertsHTML += '</span>';
-         alertsHTML += '</div></div></div>';
+         alertsHTML += '</div></div>';
          //***************** Bump nodes **********************
          // Define BOX
          alertsHTML += '<div id="bumpNodes" style="float:left; text-align: center;width: 120px;max-width: 24%;max-height:145px;margin: 1em auto 0px auto;opacity:1;border-radius: 2px;-moz-border-radius: 2px;-webkit-border-radius: 4px;border-width:1px;border-style:solid;border-color:#92C3D3;padding:2px;  display:inline-block; border-style:solid; border-width:1px; height:152px;  margin-right:5px;">';
@@ -209,11 +209,6 @@ normal RA color:#4cc600
         });
 
         $('#rotationAmount').keypress(function(event) {
-            if ((event.which != 46 || $(this).val().indexOf('.') != -1) && (event.which < 48 || event.which > 57))
-                event.preventDefault();
-        });
-
-        $('#diameterAmount').keypress(function(event) {
             if ((event.which != 46 || $(this).val().indexOf('.') != -1) && (event.which < 48 || event.which > 57))
                 event.preventDefault();
         });
@@ -611,13 +606,13 @@ normal RA color:#4cc600
     function diameterChangeDecreaseBtnClick(e){
         e.stopPropagation();
         var segObj = WazeWrap.getSelectedFeatures()[0];
-        ChangeDiameter(segObj, -$('#diameterAmount').val() / 2);
+        ChangeDiameter(segObj, -1);
     }
 
     function diameterChangeIncreaseBtnClick(e){
         e.stopPropagation();
         var segObj = WazeWrap.getSelectedFeatures()[0];
-        ChangeDiameter(segObj, +$('#diameterAmount').val() / 2);
+        ChangeDiameter(segObj, 1);
     }
 
     function moveNodeIn(sourceSegID, nodeID){
