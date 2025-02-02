@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         WME RA Util
 // @namespace    https://greasyfork.org/users/30701-justins83-waze
-// @version      2024.01.24.01
+// @version      2025.02.02.01
 // @description  Providing basic utility for RA adjustment without the need to delete & recreate
 // @include      https://www.waze.com/editor*
 // @include      https://www.waze.com/*/editor*
@@ -43,7 +43,7 @@ normal RA color:#4cc600
 
     //var totalActions = 0;
     var _settings;
-    const updateMessage = "WME 2.206 compatibility. <br><br>Thanks to lacmacca for the update!";
+    const updateMessage = "Fixed center calculation - was using custom calculations (for some reason?) in some cases, which also failed because of WME changes - this caused the RA Angle circles to be drawn off center (sometimes incredibly so).  Now always using the RA's center position as defined by WME. <br><br>Fixed variable scoping in some areas.";
 
     function bootstrap(tries = 1) {
 
@@ -214,6 +214,7 @@ normal RA color:#4cc600
         });
 
         $('#collapserLink').click(function(){
+            $("#divWrappers").slideToggle("fast");
             if($('#collapser').attr('class') == "fa fa-caret-square-o-down"){
                 $("#collapser").removeClass("fa-caret-square-o-down");
                 $("#collapser").addClass("fa-caret-square-o-up");
@@ -244,8 +245,9 @@ normal RA color:#4cc600
         $("#chkRARoundaboutAngles").prop('checked', _settings.RoundaboutAngles);
 
         if(!_settings.Expanded){
-            $("#divWrappers").removeClass("in");
-            $("#divWrappers").addClass("collapse");
+            //$("#divWrappers").removeClass("in");
+            //$("#divWrappers").addClass("collapse");
+            $("#divWrappers").hide();
             $("#collapser").removeClass("fa-caret-square-o-up");
             $("#collapser").addClass("fa-caret-square-o-down");
         }
@@ -472,6 +474,7 @@ normal RA color:#4cc600
             //Loop through all RA segments & adjust
             for(let i=0; i<RASegs.length; i++){
                 segObj = W.model.segments.getObjectById(RASegs[i]);
+debugger;
                 newGeometry = structuredClone(segObj.attributes.geoJSONGeometry);
                 originalLength = segObj.attributes.geoJSONGeometry.coordinates.length;
 
@@ -753,7 +756,7 @@ normal RA color:#4cc600
         if(layers.length > 0)
             drc_layer = layers[0];
         else {
-            var drc_style = new OpenLayers.Style({
+            let drc_style = new OpenLayers.Style({
                 fillOpacity: 0.0,
                 strokeOpacity: 1.0,
                 fillColor: "#FF40C0",
@@ -796,15 +799,15 @@ normal RA color:#4cc600
         //---------collect all roundabouts first
         var rsegments = {};
 
-        for (var iseg in W.model.segments.objects) {
+        for (let iseg in W.model.segments.objects) {
             let isegment = W.model.segments.getObjectById(iseg);
-            var iattributes = isegment.attributes;
-            var iline = isegment.getOLGeometry().id;
+            let iattributes = isegment.attributes;
+            let iline = isegment.getOLGeometry().id;
 
             let irid = iattributes.junctionID;
 
             if (iline !== null && irid != undefined) {
-                var rsegs = rsegments[irid];
+                let rsegs = rsegments[irid];
                 if (rsegs == undefined)
                     rsegments[irid] = rsegs = new Array();
                 rsegs.push(isegment);
@@ -819,38 +822,38 @@ normal RA color:#4cc600
 
             let isegment = rsegs[0];
 
-            var nodes = [];
-            var nodes_x = [];
-            var nodes_y = [];
+            let nodes = [];
+            let nodes_x = [];
+            let nodes_y = [];
 
             nodes = rsegs.map(seg => seg.attributes.fromNodeID); //get from nodes
             nodes = [...nodes, ...rsegs.map(seg => seg.attributes.toNodeID)]; //get to nodes add to from nodes
             nodes = _.uniq(nodes); //remove duplicates
 
-            var node_objects = W.model.nodes.getByIds(nodes);
+            let node_objects = W.model.nodes.getByIds(nodes);
             nodes_x = node_objects.map(n => n.getOLGeometry().x); //get all x locations
             nodes_y = node_objects.map(n => n.getOLGeometry().y); //get all y locations
 
-            var sr_x = 0;
-            var sr_y = 0;
-            var radius = 0;
-            var numNodes = nodes_x.length;
+            let sr_x = 0;
+            let sr_y = 0;
+            let radius = 0;
+            let numNodes = nodes_x.length;
 
             if (numNodes >= 1) {
-                var ax = nodes_x[0];
-                var ay = nodes_y[0];
+                let ax = nodes_x[0];
+                let ay = nodes_y[0];
+debugger;
+                let junction = W.model.junctions.getObjectById(irid);
+                //var junction_coords = junction && junction.getOLGeometry() && junction.getOLGeometry().coordinates;
 
-                var junction = W.model.junctions.getObjectById(irid);
-                var junction_coords = junction && junction.getOLGeometry() && junction.getOLGeometry().coordinates;
-
-                if (junction_coords && junction_coords.length == 2) {
+//                if (junction_coords && junction_coords.length == 2) {
                     //---------- get center point from junction model
-                    let lonlat = new OpenLayers.LonLat(junction_coords[0], junction_coords[1]);
-                    lonlat.transform(W.Config.map.projection.remote, W.Config.map.projection.local);
-                    let pt = new OpenLayers.Geometry.Point(lonlat.lon, lonlat.lat);
-                    sr_x = pt.x;
-                    sr_y = pt.y;
-                }
+                    //let lonlat = new OpenLayers.LonLat(junction_coords[0], junction_coords[1]);
+                    //lonlat.transform(W.Config.map.projection.remote, W.Config.map.projection.local);
+                    //let pt = new OpenLayers.Geometry.Point(lonlat.lon, lonlat.lat);
+                    sr_x = junction.getOLGeometry().x;
+                    sr_y = junction.getOLGeometry().y;
+/**                }
                 else if (numNodes >= 3) {
                     //-----------simple approximation of centre point calculated from three first points
                     let bx = nodes_x[1];
@@ -877,24 +880,24 @@ normal RA color:#4cc600
                     var center = rbounds.getCenterPixel();
                     sr_x = center.x;
                     sr_y = center.y;
-                }
+                }**/
 
-                var angles = [];
-                var rr = -1;
-                var r_ix;
+                let angles = [];
+                let rr = -1;
+                let r_ix;
 
                 for(let i=0; i<nodes_x.length; i++) {
 
-                    var dx = nodes_x[i] - sr_x;
-                    var dy = nodes_y[i] - sr_y;
+                    let dx = nodes_x[i] - sr_x;
+                    let dy = nodes_y[i] - sr_y;
 
-                    var rr2 = dx*dx + dy*dy;
+                    let rr2 = dx*dx + dy*dy;
                     if (rr < rr2) {
                         rr = rr2;
                         r_ix = i;
                     }
 
-                    var angle = Math.atan2(dy, dx);
+                    let angle = Math.atan2(dy, dx);
                     angle = (360.0 + (angle * 180.0 / Math.PI));
                     if (angle < 0.0) angle += 360.0;
                     if (angle > 360.0) angle -= 360.0;
@@ -908,11 +911,11 @@ normal RA color:#4cc600
                 angles.push( angles[0] + 360.0);
                 angles = angles.sort(function(a,b) { return a - b; });
 
-                var drc_color = (numNodes <= 4) ? "#0040FF" : "#002080";
+                let drc_color = (numNodes <= 4) ? "#0040FF" : "#002080";
 
-                var drc_point = new OpenLayers.Geometry.Point(sr_x, sr_y );
-                var drc_circle = new OpenLayers.Geometry.Polygon.createRegularPolygon( drc_point, radius, 10 * W.map.getZoom() );
-                var drc_feature = new OpenLayers.Feature.Vector(drc_circle, {labelText: "", labelColor: "#000000", strokeColor: drc_color, });
+                let drc_point = new OpenLayers.Geometry.Point(sr_x, sr_y );
+                let drc_circle = new OpenLayers.Geometry.Polygon.createRegularPolygon( drc_point, radius, 10 * W.map.getZoom() );
+                let drc_feature = new OpenLayers.Feature.Vector(drc_circle, {labelText: "", labelColor: "#000000", strokeColor: drc_color, });
                 drc_features.push(drc_feature);
 
 
@@ -928,13 +931,13 @@ normal RA color:#4cc600
                         drc_features.push(fea);
                     }
 
-                    var angles_int = [];
-                    var angles_float = [];
-                    var angles_sum = 0;
+                    let angles_int = [];
+                    let angles_float = [];
+                    let angles_sum = 0;
 
                     for(let i=0; i<angles.length - 1; i++) {
 
-                        var ang = angles[i+1] - angles[i+0];
+                        let ang = angles[i+1] - angles[i+0];
                         if (ang < 0) ang += 360.0;
                         if (ang < 0) ang += 360.0;
 
@@ -1010,8 +1013,8 @@ normal RA color:#4cc600
                 let geo_radius = line.getGeodesicLength(W.map.getProjectionObject());
 
                 let diam = geo_radius * 2.0;
-                let pt = new OpenLayers.Geometry.Point(sr_x, sr_y);
-                drc_features.push(new OpenLayers.Feature.Vector( pt, {labelText: (diam.toFixed(0) + "m"), labelColor: "#000000" } ));
+                let center_pt = new OpenLayers.Geometry.Point(sr_x, sr_y);
+                drc_features.push(new OpenLayers.Feature.Vector( center_pt, {labelText: (diam.toFixed(0) + "m"), labelColor: "#000000" } ));
 
             }
 
