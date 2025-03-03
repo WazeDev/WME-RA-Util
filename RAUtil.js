@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         WME RA Util
 // @namespace    https://greasyfork.org/users/30701-justins83-waze
-// @version      2025.02.02.01
+// @version      2025.03.3.01
 // @description  Providing basic utility for RA adjustment without the need to delete & recreate
 // @include      https://www.waze.com/editor*
 // @include      https://www.waze.com/*/editor*
@@ -43,7 +43,7 @@ normal RA color:#4cc600
 
     //var totalActions = 0;
     var _settings;
-    const updateMessage = "Fixed center calculation - was using custom calculations (for some reason?) in some cases, which also failed because of WME changes - this caused the RA Angle circles to be drawn off center (sometimes incredibly so).  Now always using the RA's center position as defined by WME. <br><br>Fixed variable scoping in some areas.";
+    const updateMessage = "Removed debugger lines.  No more waa waas";
 
     function bootstrap(tries = 1) {
 
@@ -474,7 +474,6 @@ normal RA color:#4cc600
             //Loop through all RA segments & adjust
             for(let i=0; i<RASegs.length; i++){
                 segObj = W.model.segments.getObjectById(RASegs[i]);
-debugger;
                 newGeometry = structuredClone(segObj.attributes.geoJSONGeometry);
                 originalLength = segObj.attributes.geoJSONGeometry.coordinates.length;
 
@@ -842,7 +841,6 @@ debugger;
             if (numNodes >= 1) {
                 let ax = nodes_x[0];
                 let ay = nodes_y[0];
-debugger;
                 let junction = W.model.junctions.getObjectById(irid);
                 //var junction_coords = junction && junction.getOLGeometry() && junction.getOLGeometry().coordinates;
 
