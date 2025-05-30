@@ -1,20 +1,23 @@
 // ==UserScript==
 // @name         WME RA Util
 // @namespace    https://greasyfork.org/users/30701-justins83-waze
-// @version      2025.03.3.01
+// @version      2025.05.30.01
 // @description  Providing basic utility for RA adjustment without the need to delete & recreate
 // @include      https://www.waze.com/editor*
 // @include      https://www.waze.com/*/editor*
 // @include      https://beta.waze.com/*
 // @exclude      https://www.waze.com/user/editor*
 // @require      https://greasyfork.org/scripts/24851-wazewrap/code/WazeWrap.js
+// @require      https://cdn.jsdelivr.net/gh/WazeSpace/wme-sdk-plus@latest/wme-sdk-plus.js
+// @require      https://cdn.jsdelivr.net/npm/@turf/turf@7.2.0/turf.min.js
 // @connect      greasyfork.org
 // @author       JustinS83
 // @grant        GM_xmlhttpRequest
+// @grant        unsafeWindow
 // @license      GPLv3
 // @contributionURL https://github.com/WazeDev/Thank-The-Authors
 // @downloadURL https://update.greasyfork.org/scripts/23616/WME%20RA%20Util.user.js
-// @updateURL https://update.greasyfork.org/scripts/23616/WME%20RA%20Util.meta.js
+// @updateURL https://update.greasyfork.org/scripts/23616/WME%20RA%20Util.user.js
 // ==/UserScript==
 
 /* global W */
@@ -32,30 +35,43 @@ normal RA color:#4cc600
 */
 (function() {
 
+    let sdk;
     var RAUtilWindow = null;
     var UpdateSegmentGeometry;
     var MoveNode, MultiAction;
     var drc_layer;
-	let wEvents;
     const SCRIPT_VERSION = GM_info.script.version.toString();
     const SCRIPT_NAME = GM_info.script.name;
     const DOWNLOAD_URL = GM_info.scriptUpdateURL;
 
     //var totalActions = 0;
     var _settings;
-    const updateMessage = "Removed debugger lines.  No more waa waas";
+    const updateMessage = "Conversion to WME SDK";
 
-    function bootstrap(tries = 1) {
-
-        if (W && W.map && W.model && require && WazeWrap.Ready){
+    async function bootstrap() {
+        const wmeSdk = getWmeSdk({scriptId: "wme-ra-util", scriptName: "WME RA Util"});
+        const sdkPlus = await initWmeSdkPlus(wmeSdk, {
+            hooks: ['Editing.Transactions'],
+        });
+        sdk = sdkPlus || wmeSdk;
+        sdk.Events.once({ eventName: "wme-ready" }).then(() => {
             loadScriptUpdateMonitor();
             init();
-        }
-        else if (tries < 1000)
-            setTimeout(function () {bootstrap(++tries);}, 200);
+        });
     }
 
-    bootstrap();
+    function waitForWME() {
+        if (typeof W === 'undefined' || 
+            typeof getWmeSdk === 'undefined' || 
+            !unsafeWindow.SDK_INITIALIZED) {
+            setTimeout(waitForWME, 100);
+            return;
+        }
+        
+        unsafeWindow.SDK_INITIALIZED.then(bootstrap);
+    }
+    
+    waitForWME();
 
     function loadScriptUpdateMonitor() {
         let updateMonitor;
@@ -70,16 +86,15 @@ normal RA color:#4cc600
 
     function init(){
         injectCss();
-        UpdateSegmentGeometry = require('Waze/Action/UpdateSegmentGeometry');
-        MoveNode = require("Waze/Action/MoveNode");
-        MultiAction = require("Waze/Action/MultiAction");
+        sdk.Map.addLayer({
+            layerName: "__DrawRoundaboutAngles",
+            styleRules: styleConfig.styleRules,
+            styleContext: styleConfig.styleContext,
+        });
+        sdk.Map.setLayerVisibility({layerName: "__DrawRoundaboutAngles", visibility: true})
 
         console.log("RA UTIL");
         console.log(GM_info.script);
-        if(W.map.events)
-		    wEvents = W.map.events;
-	    else
-		    wEvents = W.map.getMapEventsListener();
 
         RAUtilWindow = document.createElement('div');
         RAUtilWindow.id = "RAUtilWindow";
@@ -198,10 +213,10 @@ normal RA color:#4cc600
         $('#diameterChangeDecreaseBtn').click(diameterChangeDecreaseBtnClick);
         $('#diameterChangeIncreaseBtn').click(diameterChangeIncreaseBtnClick);
 
-        $('#btnMoveANodeIn').click(function(){moveNodeIn(WazeWrap.getSelectedFeatures()[0].WW.getObjectModel().attributes.id, WazeWrap.getSelectedFeatures()[0].WW.getObjectModel().attributes.fromNodeID);});
-        $('#btnMoveANodeOut').click(function(){moveNodeOut(WazeWrap.getSelectedFeatures()[0].WW.getObjectModel().attributes.id, WazeWrap.getSelectedFeatures()[0].WW.getObjectModel().attributes.fromNodeID);});
-        $('#btnMoveBNodeIn').click(function(){moveNodeIn(WazeWrap.getSelectedFeatures()[0].WW.getObjectModel().attributes.id, WazeWrap.getSelectedFeatures()[0].WW.getObjectModel().attributes.toNodeID);});
-        $('#btnMoveBNodeOut').click(function(){moveNodeOut(WazeWrap.getSelectedFeatures()[0].WW.getObjectModel().attributes.id, WazeWrap.getSelectedFeatures()[0].WW.getObjectModel().attributes.toNodeID);});
+        $('#btnMoveANodeIn').click(function(){moveNodeIn(sdk.Editing.getSelection().ids[0], sdk.DataModel.Segments.getById({segmentId: sdk.Editing.getSelection().ids[0]}).fromNodeId);});
+        $('#btnMoveANodeOut').click(function(){moveNodeOut(sdk.Editing.getSelection().ids[0], sdk.DataModel.Segments.getById({segmentId: sdk.Editing.getSelection().ids[0]}).fromNodeId);});
+        $('#btnMoveBNodeIn').click(function(){moveNodeIn(sdk.Editing.getSelection().ids[0], sdk.DataModel.Segments.getById({segmentId: sdk.Editing.getSelection().ids[0]}).toNodeId);});
+        $('#btnMoveBNodeOut').click(function(){moveNodeOut(sdk.Editing.getSelection().ids[0], sdk.DataModel.Segments.getById({segmentId: sdk.Editing.getSelection().ids[0]}).toNodeId);});
 
         $('#shiftAmount').keypress(function(event) {
             if ((event.which != 46 || $(this).val().indexOf('.') != -1) && (event.which < 48 || event.which > 57))
@@ -226,7 +241,7 @@ normal RA color:#4cc600
             saveSettingsToStorage();
         });
 
-        W.selectionManager.events.register("selectionchanged", null, checkDisplayTool);
+        sdk.Events.on({eventName: "wme-selection-changed", eventHandler: checkDisplayTool});
         //W.model.actionManager.events.register("afterundoaction",null, undotriggered);
         //W.model.actionManager.events.register("afterclearactions",null,actionsCleared);
 
@@ -256,21 +271,21 @@ normal RA color:#4cc600
             saveSettingsToStorage();
 
             if($("#chkRARoundaboutAngles").is(":checked")){
-                wEvents.register("zoomend", null, DrawRoundaboutAngles);
-                wEvents.register("moveend", null, DrawRoundaboutAngles);
+                sdk.Events.on({eventName: "wme-map-zoom-changed", eventHandler: DrawRoundaboutAngles});
+                sdk.Events.on({eventName: "wme-map-move-end", eventHandler: DrawRoundaboutAngles});
                 DrawRoundaboutAngles();
-                drc_layer.setVisibility(true);
+                sdk.Map.setLayerVisibility({layerName: "__DrawRoundaboutAngles", visibility: true});
             }
             else{
-                wEvents.unregister("zoomend", null, DrawRoundaboutAngles);
-                wEvents.unregister("moveend", null, DrawRoundaboutAngles);
-                drc_layer.setVisibility(false);
+                sdk.Events.off({eventName: "wme-map-zoom-changed", eventHandler: DrawRoundaboutAngles});
+                sdk.Events.off({eventName: "wme-map-move-end", eventHandler: DrawRoundaboutAngles});
+                sdk.Map.setLayerVisibility({layerName: "__DrawRoundaboutAngles", visibility: false});
             }
         });
 
         if(_settings.RoundaboutAngles){
-            wEvents.register("zoomend", null, DrawRoundaboutAngles);
-            wEvents.register("moveend", null, DrawRoundaboutAngles);
+            sdk.Events.on({eventName: "wme-map-zoom-changed", eventHandler: DrawRoundaboutAngles});
+            sdk.Events.on({eventName: "wme-map-move-end", eventHandler: DrawRoundaboutAngles});
             DrawRoundaboutAngles();
         }
 
@@ -295,8 +310,8 @@ normal RA color:#4cc600
     }
 
     function checkDisplayTool(){
-        if(WazeWrap.hasSelectedFeatures() && WazeWrap.getSelectedFeatures()[0].WW.getType() === 'segment'){
-            if(!AllSelectedSegmentsRA() || WazeWrap.getSelectedFeatures().length === 0)
+        if(sdk.Editing.getSelection() && sdk.Editing.getSelection().objectType === 'segment'){
+            if(!AllSelectedSegmentsRA() || sdk.Editing.getSelection().ids.length === 0)
                 $('#RAUtilWindow').css({'visibility': 'hidden'});
             else{
                 $('#RAUtilWindow').css({'visibility': 'visible'});
@@ -308,7 +323,8 @@ normal RA color:#4cc600
                         }
                     });
                 //checkSaveChanges();
-                checkAllEditable(WazeWrap.Model.getAllRoundaboutSegmentsFromObj(WazeWrap.getSelectedFeatures()[0]));
+                let segObj = sdk.DataModel.Segments.getById({segmentId: sdk.Editing.getSelection().ids[0]});
+                checkAllEditable(sdk.DataModel.Junctions.getById({junctionId: segObj.junctionId}).segmentIds);
             }
         }
         else{
@@ -329,31 +345,31 @@ normal RA color:#4cc600
         var segObj, fromNode, toNode;
 
         for(let i=0; i<RASegs.length;i++){
-            segObj = W.model.segments.getObjectById(RASegs[i]);
-            fromNode = segObj.getFromNode();
-            toNode = segObj.getToNode();
+            segObj = sdk.DataModel.Segments.getById({segmentId: RASegs[i]})
+            fromNode = sdk.DataModel.Nodes.getById({nodeId: segObj.fromNodeId});
+            toNode = sdk.DataModel.Nodes.getById({nodeId: segObj.toNodeId});
 
             if(segObj !== "undefined"){
-                if(fromNode && fromNode !== "undefined" && !fromNode.areConnectionsEditable())
-                    allEditable = false;
-                else if(toNode && toNode !== "undefined" && !toNode.areConnectionsEditable())
-                    allEditable = false;
+                // if(fromNode && fromNode !== "undefined" && !fromNode.areConnectionsEditable())
+                //     allEditable = false;
+                // else if(toNode && toNode !== "undefined" && !toNode.areConnectionsEditable())
+                //     allEditable = false;
                 var toConnected, fromConnected;
 
                 if(toNode){
-                    toConnected = toNode.attributes.segIDs;
+                    toConnected = toNode.connectedSegmentIds;
                     for(let j=0;j<toConnected.length;j++){
-                        if(W.model.segments.getObjectById(toConnected[j]) !== "undefined")
-                            if(W.model.segments.getObjectById(toConnected[j]).hasClosures())
+                        if(sdk.DataModel.Segments.getById({segmentId: toConnected[j]}) !== "undefined")
+                            if(sdk.DataModel.Segments.getById({segmentId: toConnected[j]}).hasClosures)
                                 allEditable = false;
                     }
                 }
 
                 if(fromNode){
-                    fromConnected = fromNode.attributes.segIDs;
+                    fromConnected = fromNode.connectedSegmentIds;
                     for(let j=0;j<fromConnected.length;j++){
-                        if(W.model.segments.getObjectById(fromConnected[j]) !== "undefined")
-                            if(W.model.segments.getObjectById(fromConnected[j]).hasClosures())
+                        if(sdk.DataModel.Segments.getById({segmentId: fromConnected[j]}) !== "undefined")
+                            if(sdk.DataModel.Segments.getById({segmentId: fromConnected[j]}).hasClosures)
                                 allEditable = false;
                     }
                 }
@@ -372,87 +388,92 @@ normal RA color:#4cc600
     }
 
     function AllSelectedSegmentsRA(){
-        for (let i = 0; i < WazeWrap.getSelectedFeatures().length; i++){
-            if(WazeWrap.getSelectedFeatures()[i].WW.getObjectModel().attributes.id < 0 || !WazeWrap.Model.isRoundaboutSegmentID(WazeWrap.getSelectedFeatures()[i].WW.getObjectModel().attributes.id))
+        for (let segmentId of sdk.Editing.getSelection().ids){
+            if(segmentId < 0 || !sdk.DataModel.Segments.getById({segmentId: segmentId}).junctionId)
                 return false;
         }
         return true;
     }
 
     function ShiftSegmentNodesLat(segObj, latOffset){
-        var RASegs = WazeWrap.Model.getAllRoundaboutSegmentsFromObj(segObj);
+        var RASegs = sdk.DataModel.Junctions.getById({junctionId: segObj.junctionId}).segmentIds;
         if(checkAllEditable(RASegs)){
             var newGeometry, originalLength;
-            var multiaction = new MultiAction();
-            // multiaction.setModel(W.model);
+            try {
+                sdk.Editing.beginTransaction();
 
-            for(let i=0; i<RASegs.length; i++){
-                segObj = W.model.segments.getObjectById(RASegs[i]);
-                newGeometry = structuredClone(segObj.attributes.geoJSONGeometry);
-                originalLength = segObj.attributes.geoJSONGeometry.coordinates.length;
-                for(j=1; j < originalLength-1; j++){
-                    newGeometry.coordinates[j][1] += latOffset;
+                for(let i=0; i<RASegs.length; i++){
+                    segObj = sdk.DataModel.Segments.getById({segmentId: RASegs[i]});
+                    newGeometry = structuredClone(segObj.geometry);
+                    originalLength = segObj.geometry.coordinates.length;
+                    for(j=1; j < originalLength-1; j++){
+                        newGeometry.coordinates[j][1] += latOffset;
+                    }
+                    
+                    sdk.DataModel.Segments.updateSegment({segmentId: segObj.id, geometry: newGeometry});
+
+                    var node = sdk.DataModel.Nodes.getById({nodeId: segObj.toNodeId});
+                    if(segObj.isBtoA)
+                        node = sdk.DataModel.Nodes.getById({nodeId: segObj.fromNodeId});
+                    var newNodeGeometry = structuredClone(node.geometry);
+                    newNodeGeometry.coordinates[1] += latOffset;
+
+                    var connectedSegObjs = {};
+                    for(var j=0;j<node.connectedSegmentIds.length;j++){
+                        var segid = node.connectedSegmentIds[j];
+                        connectedSegObjs[segid] = structuredClone(sdk.DataModel.Segments.getById({segmentId: segid}).geometry);
+                    }
+                    sdk.DataModel.Nodes.moveNode({id: node.id, geometry: newNodeGeometry});
+                    //totalActions +=2;
                 }
-                //W.model.actionManager.add(new UpdateSegmentGeometry(segObj, segObj.geometry, newGeometry));
-                multiaction.doSubAction(W.model, new UpdateSegmentGeometry(segObj, segObj.attributes.geoJSONGeometry, newGeometry));
-
-                var node = W.model.nodes.objects[segObj.attributes.toNodeID];
-                if(segObj.attributes.revDirection)
-                    node = W.model.nodes.objects[segObj.attributes.fromNodeID];
-                var newNodeGeometry = structuredClone(node.attributes.geoJSONGeometry);
-                newNodeGeometry.coordinates[1] += latOffset;
-
-                var connectedSegObjs = {};
-                var emptyObj = {};
-                for(var j=0;j<node.attributes.segIDs.length;j++){
-                    var segid = node.attributes.segIDs[j];
-                    connectedSegObjs[segid] = structuredClone(W.model.segments.getObjectById(segid).attributes.geoJSONGeometry);
-                }
-                //W.model.actionManager.add(new MoveNode(segObj, segObj.geometry, newNodeGeometry, connectedSegObjs, i));
-                multiaction.doSubAction(W.model, new MoveNode(node, node.attributes.geoJSONGeometry, newNodeGeometry, connectedSegObjs, emptyObj));
-                //W.model.actionManager.add(new MoveNode(node, node.geometry, newNodeGeometry));
-                //totalActions +=2;
+                sdk.Editing.commitTransaction('Moved roundabout');
+            } catch (error) {
+                console.error(error);
+                WazeWrap.Alerts.error('WME RA Util', 'An error occured while moving the roundabout vertically.');
+                sdk.Editing.cancelTransaction();
             }
-            W.model.actionManager.add(multiaction);
         }
     }
 
     function ShiftSegmentsNodesLong(segObj, longOffset){
-        var RASegs = WazeWrap.Model.getAllRoundaboutSegmentsFromObj(segObj);
+        var RASegs = sdk.DataModel.Junctions.getById({junctionId: segObj.junctionId}).segmentIds;
         if(checkAllEditable(RASegs)){
             var newGeometry, originalLength;
-            var multiaction = new MultiAction();
-            // multiaction.setModel(W.model);
+            try {
+                sdk.Editing.beginTransaction();
 
-            //Loop through all RA segments & adjust
-            for(let i=0; i<RASegs.length; i++){
-                segObj = W.model.segments.getObjectById(RASegs[i]);
-                newGeometry = structuredClone(segObj.attributes.geoJSONGeometry);
-                originalLength = segObj.attributes.geoJSONGeometry.coordinates.length;
-                for(let j=1; j < originalLength-1; j++){
-                    newGeometry.coordinates[j][0] += longOffset;
+                //Loop through all RA segments & adjust
+                for(let i=0; i<RASegs.length; i++){
+                    segObj = sdk.DataModel.Segments.getById({segmentId: RASegs[i]});
+                    newGeometry = structuredClone(segObj.geometry);
+                    originalLength = segObj.geometry.coordinates.length;
+                    for(let j=1; j < originalLength-1; j++){
+                        newGeometry.coordinates[j][0] += longOffset;
+                    }
+                    
+                    sdk.DataModel.Segments.updateSegment({segmentId: segObj.id, geometry: newGeometry});
+
+                    var node = sdk.DataModel.Nodes.getById({nodeId: segObj.toNodeId});
+                    if(segObj.isBtoA)
+                        node = sdk.DataModel.Nodes.getById({nodeId: segObj.fromNodeId});
+
+                    var newNodeGeometry = structuredClone(node.geometry);
+                    newNodeGeometry.coordinates[0] += longOffset;
+
+                    var connectedSegObjs = {};
+                    for(let j=0;j<node.connectedSegmentIds.length;j++){
+                        var segid = node.connectedSegmentIds[j];
+                        connectedSegObjs[segid] = structuredClone(W.model.segments.getObjectById(segid).geometry);
+                    }
+                    sdk.DataModel.Nodes.moveNode({id: node.id, geometry: newNodeGeometry});
+                    //totalActions +=2;
                 }
-                //W.model.actionManager.add(new UpdateSegmentGeometry(segObj, segObj.geometry, newGeometry));
-                multiaction.doSubAction(W.model, new UpdateSegmentGeometry(segObj, segObj.attributes.geoJSONGeometry, newGeometry));
-
-                var node = W.model.nodes.objects[segObj.attributes.toNodeID];
-                if(segObj.attributes.revDirection)
-                    node = W.model.nodes.objects[segObj.attributes.fromNodeID];
-
-                var newNodeGeometry = structuredClone(node.attributes.geoJSONGeometry);
-                newNodeGeometry.coordinates[0] += longOffset;
-
-                var connectedSegObjs = {};
-                var emptyObj = {};
-                for(let j=0;j<node.attributes.segIDs.length;j++){
-                    var segid = node.attributes.segIDs[j];
-                    connectedSegObjs[segid] = structuredClone(W.model.segments.getObjectById(segid).attributes.geoJSONGeometry);
-                }
-                //W.model.actionManager.add(new MoveNode(node, node.geometry, newNodeGeometry));
-                multiaction.doSubAction(W.model, new MoveNode(node, node.attributes.geoJSONGeometry, newNodeGeometry, connectedSegObjs, emptyObj));
-                //totalActions +=2;
+                sdk.Editing.commitTransaction('Moved roundabout');
+            } catch (error) {
+                console.error(error);
+                WazeWrap.Alerts.error('WME RA Util', 'An error occured while moving the roundabout horizontally.');
+                sdk.Editing.cancelTransaction();
             }
-            W.model.actionManager.add(multiaction);
         }
     }
 
@@ -463,240 +484,259 @@ normal RA color:#4cc600
     }
 
     function RotateRA(segObj, angle){
-        var RASegs = WazeWrap.Model.getAllRoundaboutSegmentsFromObj(segObj);
-        var raCenter = W.model.junctions.objects[segObj.WW.getAttributes().junctionID].attributes.geoJSONGeometry.coordinates;
+        var RASegs = sdk.DataModel.Junctions.getById({junctionId: segObj.junctionId}).segmentIds;
+        var raCenter = sdk.DataModel.Junctions.getById({junctionId: segObj.junctionId}).geometry.coordinates;
 
         if(checkAllEditable(RASegs)){
             var gps, newGeometry, originalLength;
-            var multiaction = new MultiAction();
-            // multiaction.setModel(W.model);
+            try {
+                sdk.Editing.beginTransaction();
 
-            //Loop through all RA segments & adjust
-            for(let i=0; i<RASegs.length; i++){
-                segObj = W.model.segments.getObjectById(RASegs[i]);
-                newGeometry = structuredClone(segObj.attributes.geoJSONGeometry);
-                originalLength = segObj.attributes.geoJSONGeometry.coordinates.length;
+                //Loop through all RA segments & adjust
+                for(let i=0; i<RASegs.length; i++){
+                    segObj = sdk.DataModel.Segments.getById({segmentId: RASegs[i]});
+                    newGeometry = structuredClone(segObj.geometry);
+                    originalLength = segObj.geometry.coordinates.length;
 
-                var center = raCenter; //WazeWrap.Geometry.ConvertTo900913(raCenter.x, raCenter.y);
-                var segPoints = [];
-                //Have to copy the points manually (can't use .clone()) otherwise the geometry rotation modifies the geometry of the segment itself and that hoses WME.
-                for(let j=0; j<originalLength;j++)
-                    segPoints.push(new OpenLayers.Geometry.Point(segObj.attributes.geoJSONGeometry.coordinates[j][0], segObj.attributes.geoJSONGeometry.coordinates[j][1]));
+                    var center = raCenter; //WazeWrap.Geometry.ConvertTo900913(raCenter.x, raCenter.y);
+                    var segPoints = [];
+                    //Have to copy the points manually (can't use .clone()) otherwise the geometry rotation modifies the geometry of the segment itself and that hoses WME.
+                    for(let j=0; j<originalLength;j++)
+                        segPoints.push(new OpenLayers.Geometry.Point(segObj.geometry.coordinates[j][0], segObj.geometry.coordinates[j][1]));
 
-                var newPoints = rotatePoints(center, segPoints, angle);
+                    var newPoints = rotatePoints(center, segPoints, angle);
 
-                for(let j=1; j<originalLength-1;j++){
-                    newGeometry.coordinates[j] = [newPoints[j].x, newPoints[j].y];
+                    for(let j=1; j<originalLength-1;j++){
+                        newGeometry.coordinates[j] = [newPoints[j].x, newPoints[j].y];
+                    }
+
+                    sdk.DataModel.Segments.updateSegment({segmentId: segObj.id, geometry: newGeometry});
+
+                    //**************Rotate Nodes******************
+                    var node = sdk.DataModel.Nodes.getById({nodeId: segObj.toNodeId});
+                    if(segObj.isBtoA)
+                        node = sdk.DataModel.Nodes.getById({nodeId: segObj.fromNodeId});
+
+                    var nodePoints = [];
+                    var newNodeGeometry = structuredClone(node.geometry);
+
+                    nodePoints.push(new OpenLayers.Geometry.Point(node.geometry.coordinates[0], node.geometry.coordinates[1]));
+                    nodePoints.push(new OpenLayers.Geometry.Point(node.geometry.coordinates[0], node.geometry.coordinates[1])); //add it twice because lines need 2 points
+
+                    gps = rotatePoints(center, nodePoints, angle);
+
+                    newNodeGeometry.coordinates = [gps[0].x, gps[0].y];
+
+                    var connectedSegObjs = {};
+                    for(let j=0;j<node.connectedSegmentIds.length;j++){
+                        var segid = node.connectedSegmentIds[j];
+                        connectedSegObjs[segid] = structuredClone(sdk.DataModel.Segments.getById({segmentId: segid}).geometry);
+                    }
+                    sdk.DataModel.Nodes.moveNode({id: node.id, geometry: newNodeGeometry});
+                    //totalActions +=2;
                 }
-
-                //W.model.actionManager.add(new UpdateSegmentGeometry(segObj, segObj.geometry, newGeometry));
-                multiaction.doSubAction(W.model, new UpdateSegmentGeometry(segObj, segObj.attributes.geoJSONGeometry, newGeometry));
-
-                //**************Rotate Nodes******************
-                var node = W.model.nodes.objects[segObj.attributes.toNodeID];
-                if(segObj.attributes.revDirection)
-                    node = W.model.nodes.objects[segObj.attributes.fromNodeID];
-
-                var nodePoints = [];
-                var newNodeGeometry = structuredClone(node.attributes.geoJSONGeometry);
-
-                nodePoints.push(new OpenLayers.Geometry.Point(node.attributes.geoJSONGeometry.coordinates[0], node.attributes.geoJSONGeometry.coordinates[1]));
-                nodePoints.push(new OpenLayers.Geometry.Point(node.attributes.geoJSONGeometry.coordinates[0], node.attributes.geoJSONGeometry.coordinates[1])); //add it twice because lines need 2 points
-
-                gps = rotatePoints(center, nodePoints, angle);
-
-                newNodeGeometry.coordinates = [gps[0].x, gps[0].y];
-
-                var connectedSegObjs = {};
-                var emptyObj = {};
-                for(let j=0;j<node.attributes.segIDs.length;j++){
-                    var segid = node.attributes.segIDs[j];
-                    connectedSegObjs[segid] = structuredClone(W.model.segments.getObjectById(segid).attributes.geoJSONGeometry);
-                }
-                multiaction.doSubAction(W.model, new MoveNode(node, node.attributes.geoJSONGeometry, newNodeGeometry, connectedSegObjs, emptyObj));
-                //totalActions +=2;
+                sdk.Editing.commitTransaction('Rotated roundabout');
+            } catch (error) {
+                console.error(error);
+                WazeWrap.Alerts.error('WME RA Util', 'An error occured while rotating the roundabout.');
+                sdk.Editing.cancelTransaction();
             }
-            W.model.actionManager.add(multiaction);
         }
     }
 
     function RARotateLeftBtnClick(e){
         e.stopPropagation();
-        var segObj = WazeWrap.getSelectedFeatures()[0];
+        var segObj = sdk.DataModel.Segments.getById({segmentId: sdk.Editing.getSelection().ids[0]});
         RotateRA(segObj, $('#rotationAmount').val());
     }
 
     function RARotateRightBtnClick(e){
         e.stopPropagation();
 
-        var segObj = WazeWrap.getSelectedFeatures()[0];
+        var segObj = sdk.DataModel.Segments.getById({segmentId: sdk.Editing.getSelection().ids[0]});
         RotateRA(segObj, -$('#rotationAmount').val());
     }
 
     function ChangeDiameter(segObj, amount){
-        var RASegs = WazeWrap.Model.getAllRoundaboutSegmentsFromObj(segObj);
-        var raCenter = W.model.junctions.objects[segObj.WW.getAttributes().junctionID].attributes.geoJSONGeometry.coordinates;
+        var RASegs = sdk.DataModel.Junctions.getById({junctionId: segObj.junctionId}).segmentIds;
+        var raCenter = sdk.DataModel.Junctions.getById({junctionId: segObj.junctionId}).geometry.coordinates;
         let { lon: centerX, lat: centerY } = WazeWrap.Geometry.ConvertTo900913(raCenter);
 
         if(checkAllEditable(RASegs)){
             var newGeometry, originalLength;
+            try {
+                sdk.Editing.beginTransaction();
 
-            //Loop through all RA segments & adjust
-            for(let i=0; i<RASegs.length; i++){
-                segObj = W.model.segments.getObjectById(RASegs[i]);
-                newGeometry = structuredClone(segObj.attributes.geoJSONGeometry);
-                originalLength = segObj.attributes.geoJSONGeometry.coordinates.length;
+                //Loop through all RA segments & adjust
+                for(let i=0; i<RASegs.length; i++){
+                    segObj = sdk.DataModel.Segments.getById({segmentId: RASegs[i]});
+                    newGeometry = structuredClone(segObj.geometry);
+                    originalLength = segObj.geometry.coordinates.length;
 
-                for(let j=1; j < originalLength-1; j++){
-                    let pt = segObj.attributes.geoJSONGeometry.coordinates[j];
-                    let { lon: pointX, lat: pointY } = WazeWrap.Geometry.ConvertTo900913(pt);
+                    for(let j=1; j < originalLength-1; j++){
+                        let pt = segObj.geometry.coordinates[j];
+                        let { lon: pointX, lat: pointY } = WazeWrap.Geometry.ConvertTo900913(pt);
+                        let h = Math.sqrt(Math.abs(Math.pow(pointX - centerX, 2) + Math.pow(pointY - centerY, 2)));
+                        let ratio = (h + amount)/h;
+                        let x = centerX + (pointX - centerX) * ratio;
+                        let y = centerY + (pointY - centerY) * ratio;
+
+                        let { lon: newX, lat: newY } = WazeWrap.Geometry.ConvertTo4326([x, y]);
+                        newGeometry.coordinates[j] = [newX, newY];
+                    }
+                    sdk.DataModel.Segments.updateSegment({segmentId: segObj.id, geometry: newGeometry});
+
+                    var node = sdk.DataModel.Nodes.getById({nodeId: segObj.toNodeId});
+                    if(segObj.isBtoA)
+                        node = sdk.DataModel.Nodes.getById({nodeId: segObj.fromNodeId});
+
+                    var newNodeGeometry = structuredClone(node.geometry);
+                    let { lon: pointX, lat: pointY } = WazeWrap.Geometry.ConvertTo900913(newNodeGeometry.coordinates);
                     let h = Math.sqrt(Math.abs(Math.pow(pointX - centerX, 2) + Math.pow(pointY - centerY, 2)));
                     let ratio = (h + amount)/h;
                     let x = centerX + (pointX - centerX) * ratio;
                     let y = centerY + (pointY - centerY) * ratio;
 
                     let { lon: newX, lat: newY } = WazeWrap.Geometry.ConvertTo4326([x, y]);
-                    newGeometry.coordinates[j] = [newX, newY];
+                    newNodeGeometry.coordinates = [newX, newY];
+
+                    var connectedSegObjs = {};
+                    for(let j=0;j<node.connectedSegmentIds.length;j++){
+                        var segid = node.connectedSegmentIds[j];
+                        connectedSegObjs[segid] = structuredClone(sdk.DataModel.Segments.getById({segmentId: segid}).geometry);
+                    }
+                    sdk.DataModel.Nodes.moveNode({id: node.id, geometry: newNodeGeometry});
                 }
-                W.model.actionManager.add(new UpdateSegmentGeometry(segObj, segObj.attributes.geoJSONGeometry, newGeometry));
-
-                var node = W.model.nodes.objects[segObj.attributes.toNodeID];
-                if(segObj.attributes.revDirection)
-                    node = W.model.nodes.objects[segObj.attributes.fromNodeID];
-
-                var newNodeGeometry = structuredClone(node.attributes.geoJSONGeometry);
-                let { lon: pointX, lat: pointY } = WazeWrap.Geometry.ConvertTo900913(newNodeGeometry.coordinates);
-                let h = Math.sqrt(Math.abs(Math.pow(pointX - centerX, 2) + Math.pow(pointY - centerY, 2)));
-                let ratio = (h + amount)/h;
-                let x = centerX + (pointX - centerX) * ratio;
-                let y = centerY + (pointY - centerY) * ratio;
-
-                let { lon: newX, lat: newY } = WazeWrap.Geometry.ConvertTo4326([x, y]);
-                newNodeGeometry.coordinates = [newX, newY];
-
-                var connectedSegObjs = {};
-                var emptyObj = {};
-                for(let j=0;j<node.attributes.segIDs.length;j++){
-                    var segid = node.attributes.segIDs[j];
-                    connectedSegObjs[segid] = structuredClone(W.model.segments.getObjectById(segid).attributes.geoJSONGeometry);
-                }
-                W.model.actionManager.add(new MoveNode(node, node.attributes.geoJSONGeometry, newNodeGeometry, connectedSegObjs, emptyObj));
+                sdk.Editing.commitTransaction('Resized roundabout');
+                
+                console.log(_settings)
+                if(_settings.RoundaboutAngles)
+                    DrawRoundaboutAngles();
+            } catch (error) {
+                console.error(error);
+                WazeWrap.Alerts.error('WME RA Util', 'An error occured while resizing the roundabout.');
+                sdk.Editing.cancelTransaction();
             }
-            if(_settings.RoundaboutAngles)
-                DrawRoundaboutAngles();
         }
     }
 
     function diameterChangeDecreaseBtnClick(e){
         e.stopPropagation();
-        var segObj = WazeWrap.getSelectedFeatures()[0];
+        var segObj = sdk.DataModel.Segments.getById({segmentId: sdk.Editing.getSelection().ids[0]});
         ChangeDiameter(segObj, -1);
     }
 
     function diameterChangeIncreaseBtnClick(e){
         e.stopPropagation();
-        var segObj = WazeWrap.getSelectedFeatures()[0];
+        var segObj = sdk.DataModel.Segments.getById({segmentId: sdk.Editing.getSelection().ids[0]});
         ChangeDiameter(segObj, 1);
     }
 
     function moveNodeIn(sourceSegID, nodeID){
         let isANode = true;
-        let curSeg = W.model.segments.getObjectById(sourceSegID);
-        if (curSeg.attributes.geoJSONGeometry.coordinates.length > 2) {
-            if(nodeID === curSeg.attributes.toNodeID)
+        let curSeg = sdk.DataModel.Segments.getById({segmentId: sourceSegID});
+        if (curSeg.geometry.coordinates.length > 2) {
+            if(nodeID === curSeg.toNodeId)
                 isANode = false;
             //Add geo point on the other segment
-            let node = W.model.nodes.getObjectById(nodeID);
-            let currNodePOS = structuredClone(node.attributes.geoJSONGeometry.coordinates);
+            let node = sdk.DataModel.Nodes.getById({nodeId: nodeID});
             let otherSeg; //other RA segment that we are adding a geo point to
-            let nodeSegs = [...W.model.nodes.getObjectById(nodeID).attributes.segIDs];
+            let nodeSegs = [...node.connectedSegmentIds];
             nodeSegs = _.without(nodeSegs, sourceSegID); //remove the source segment from the node Segs - we need to find the segment that is a part of the RA that is prior to our source seg
             for(let i=0; i<nodeSegs.length; i++){
-                let s = W.model.segments.getObjectById(nodeSegs[i]);
-                if(s.attributes.junctionID){
+                let s = sdk.DataModel.Segments.getById({segmentId: nodeSegs[i]});
+                if(s.junctionId){
                     otherSeg = s;
                     break;
                 }
             }
 
-            var multiaction = new MultiAction();
-            // multiaction.setModel(W.model);
-            //note and remove first geo point, move junction node to this point
-            var newNodeGeometry = { type: 'Point', coordinates: structuredClone(curSeg.attributes.geoJSONGeometry.coordinates[isANode ? 1 : curSeg.attributes.geoJSONGeometry.coordinates.length - 2]) };
+            try {
+                sdk.Editing.beginTransaction();
+                //note and remove first geo point, move junction node to this point
+                var newNodeGeometry = { type: 'Point', coordinates: structuredClone(curSeg.geometry.coordinates[isANode ? 1 : curSeg.geometry.coordinates.length - 2]) };
 
-            let newSegGeo = structuredClone(curSeg.attributes.geoJSONGeometry);
-            newSegGeo.coordinates.splice(isANode ? 1 : newSegGeo.coordinates.length - 2, 1);
-            multiaction.doSubAction(W.model, new UpdateSegmentGeometry(curSeg, curSeg.attributes.geoJSONGeometry, newSegGeo));
+                let newCurGeometry = structuredClone(curSeg.geometry);
+                newCurGeometry.coordinates.splice(isANode ? 1 : newCurGeometry.coordinates.length - 2, 1);
+                sdk.DataModel.Segments.updateSegment({segmentId: curSeg.id, geometry: newCurGeometry});
 
-            //move the node
-            var connectedSegObjs = {};
-            var emptyObj = {};
-            for(var j=0;j<node.attributes.segIDs.length;j++){
-                var segid = node.attributes.segIDs[j];
-                connectedSegObjs[segid] = structuredClone(W.model.segments.getObjectById(segid).attributes.geoJSONGeometry);
+                //move the node
+                var connectedSegObjs = {};
+                for(var j=0;j<node.connectedSegmentIds.length;j++){
+                    var segid = node.connectedSegmentIds[j];
+                    connectedSegObjs[segid] = structuredClone(sdk.DataModel.Segments.getById({segmentId: segid}).geometry);
+                }
+                sdk.DataModel.Nodes.moveNode({id: node.id, geometry: newNodeGeometry});
+
+                if((otherSeg.isBtoA && !curSeg.isBtoA) || (!otherSeg.isBtoA && curSeg.isBtoA))
+                        isANode = !isANode;
+
+                let newOtherGeometry = structuredClone(otherSeg.geometry);
+                newOtherGeometry.coordinates.splice(isANode ? newOtherGeometry.coordinates.length : 0, 0, [newNodeGeometry.coordinates[0], newNodeGeometry.coordinates[1]]);
+                
+                sdk.DataModel.Segments.updateSegment({segmentId: otherSeg.id, geometry: newOtherGeometry});
+                sdk.Editing.commitTransaction('Moved roundabout node in');
+                
+                if(_settings.RoundaboutAngles)
+                    DrawRoundaboutAngles();
+            } catch (error) {
+                console.error(error);
+                WazeWrap.Alerts.error('WME RA Util', 'An error occured while moving a node in.');
+                sdk.Editing.cancelTransaction();
             }
-            multiaction.doSubAction(W.model, new MoveNode(node, node.attributes.geoJSONGeometry, newNodeGeometry, connectedSegObjs, emptyObj));
-
-            if((otherSeg.attributes.revDirection && !curSeg.attributes.revDirection) || (!otherSeg.attributes.revDirection && curSeg.attributes.revDirection))
-                    isANode = !isANode;
-
-            let newGeo = structuredClone(otherSeg.attributes.geoJSONGeometry);
-            newGeo.coordinates.splice(isANode ? -1 : 1, 0, [currNodePOS[0], currNodePOS[1]]);
-            
-            multiaction.doSubAction(W.model, new UpdateSegmentGeometry(otherSeg, otherSeg.attributes.geoJSONGeometry, newGeo));
-            W.model.actionManager.add(multiaction);
-
-            if(_settings.RoundaboutAngles)
-                DrawRoundaboutAngles();
         }
     }
 
     function moveNodeOut(sourceSegID, nodeID){
         let isANode = true;
-        let curSeg = W.model.segments.getObjectById(sourceSegID);
-        if(nodeID === curSeg.attributes.toNodeID)
+        let curSeg = sdk.DataModel.Segments.getById({segmentId: sourceSegID});
+        if(nodeID === curSeg.toNodeId)
             isANode = false;
         //Add geo point on the other segment
-        let node = W.model.nodes.getObjectById(nodeID);
-        let currNodePOS = structuredClone(node.attributes.geoJSONGeometry.coordinates);
+        let node = sdk.DataModel.Nodes.getById({nodeId: nodeID});
+        let currNodePOS = structuredClone(node.geometry.coordinates);
         let otherSeg; //other RA segment that we are adding a geo point to
-        let nodeSegs = [...W.model.nodes.getObjectById(nodeID).attributes.segIDs];
+        let nodeSegs = [...node.connectedSegmentIds];
         nodeSegs = _.without(nodeSegs, sourceSegID); //remove the source segment from the node Segs - we need to find the segment that is a part of the RA that is after our source seg
         for(let i=0; i<nodeSegs.length; i++){
-            let s = W.model.segments.getObjectById(nodeSegs[i]);
-            if(s.attributes.junctionID){
+            let s = sdk.DataModel.Segments.getById({segmentId: nodeSegs[i]});
+            if(s.junctionId){
                 otherSeg = s;
                 break;
             }
         }
 
-        if(otherSeg.attributes.geoJSONGeometry.coordinates.length > 2){
-            let newSegGeo = structuredClone(curSeg.attributes.geoJSONGeometry);
-            newSegGeo.coordinates.splice(isANode ? 1 : newSegGeo.coordinates.length - 1, 0, [currNodePOS[0], currNodePOS[1]]);
-            var multiaction = new MultiAction();
-            // multiaction.setModel(W.model);
-            multiaction.doSubAction(W.model, new UpdateSegmentGeometry(curSeg, curSeg.attributes.geoJSONGeometry, newSegGeo));
-            if((otherSeg.attributes.revDirection && !curSeg.attributes.revDirection) || (!otherSeg.attributes.revDirection && curSeg.attributes.revDirection))
-                isANode = !isANode;
+        if(otherSeg.geometry.coordinates.length > 2){
+            try {
+                sdk.Editing.beginTransaction();
+                let newCurGeometry = structuredClone(curSeg.geometry);
+                newCurGeometry.coordinates.splice(isANode ? 1 : newCurGeometry.coordinates.length - 1, 0, [currNodePOS[0], currNodePOS[1]]);
+                sdk.DataModel.Segments.updateSegment({segmentId: curSeg.id, geometry: newCurGeometry});
+                if((otherSeg.isBtoA && !curSeg.isBtoA) || (!otherSeg.isBtoA && curSeg.isBtoA))
+                    isANode = !isANode;
 
-            //note and remove first geo point, move junction node to this point
-            var newNodeGeometry = { type: 'Point', coordinates: structuredClone(otherSeg.attributes.geoJSONGeometry.coordinates[isANode ? otherSeg.attributes.geoJSONGeometry.coordinates.length - 2 : 1]) };
-            let newGeo = structuredClone(otherSeg.attributes.geoJSONGeometry);
-            newGeo.coordinates.splice(isANode ? -2 : 1, 1);
-            multiaction.doSubAction(W.model, new UpdateSegmentGeometry(otherSeg, otherSeg.attributes.geoJSONGeometry, newGeo));
+                //note and remove first geo point, move junction node to this point
+                var newNodeGeometry = { type: 'Point', coordinates: structuredClone(otherSeg.geometry.coordinates[isANode ? otherSeg.geometry.coordinates.length - 2 : 1]) };
+                let newOtherGeometry = structuredClone(otherSeg.geometry);
+                newOtherGeometry.coordinates.splice(isANode ? -2 : 1, 1);
+                sdk.DataModel.Segments.updateSegment({segmentId: otherSeg.id, geometry: newOtherGeometry});
 
-            //move the node
-            var connectedSegObjs = {};
-            var emptyObj = {};
-            for(var j=0; j < node.attributes.segIDs.length;j++){
-                var segid = node.attributes.segIDs[j];
-                connectedSegObjs[segid] = structuredClone(W.model.segments.getObjectById(segid).attributes.geoJSONGeometry);
+                //move the node
+                var connectedSegObjs = {};
+                for(var j=0; j < node.connectedSegmentIds.length;j++){
+                    var segid = node.connectedSegmentIds[j];
+                    connectedSegObjs[segid] = structuredClone(sdk.DataModel.Segments.getById({segmentId: segid}).geometry);
+                }
+                sdk.DataModel.Nodes.moveNode({id: node.id, geometry: newNodeGeometry});
+                sdk.Editing.commitTransaction('Moved roundabout node out');
+                
+                if(_settings.RoundaboutAngles)
+                    DrawRoundaboutAngles();
+            } catch (error) {
+                console.error(error);
+                WazeWrap.Alerts.error('WME RA Util', 'An error occured while moving a node out.');
+                sdk.Editing.cancelTransaction();
             }
-            multiaction.doSubAction(W.model, new MoveNode(node, node.attributes.geoJSONGeometry, newNodeGeometry, connectedSegObjs, emptyObj));
-            W.model.actionManager.add(multiaction);
-
-            if(_settings.RoundaboutAngles)
-                DrawRoundaboutAngles();
         }
     }
 
@@ -706,8 +746,8 @@ normal RA color:#4cc600
         e.stopPropagation();
 
         //if(!pendingChanges){
-        var segObj = WazeWrap.getSelectedFeatures()[0];
-        var convertedCoords = WazeWrap.Geometry.ConvertTo4326(segObj.WW.getAttributes().geoJSONGeometry.coordinates[0][0], segObj.WW.getAttributes().geoJSONGeometry.coordinates[0][1]);
+        var segObj = sdk.DataModel.Segments.getById({segmentId: sdk.Editing.getSelection().ids[0]});
+        var convertedCoords = WazeWrap.Geometry.ConvertTo4326(segObj.geometry.coordinates[0][0], segObj.geometry.coordinates[0][1]);
         var gpsOffsetAmount = WazeWrap.Geometry.CalculateLongOffsetGPS(-$('#shiftAmount').val(), convertedCoords.lon, convertedCoords.lat);
         ShiftSegmentsNodesLong(segObj, gpsOffsetAmount);
         //}
@@ -718,8 +758,8 @@ normal RA color:#4cc600
         e.stopPropagation();
 
         //if(!pendingChanges){
-        var segObj = WazeWrap.getSelectedFeatures()[0];
-        var convertedCoords = WazeWrap.Geometry.ConvertTo4326(segObj.WW.getAttributes().geoJSONGeometry.coordinates[0][0], segObj.WW.getAttributes().geoJSONGeometry.coordinates[0][1]);
+        var segObj = sdk.DataModel.Segments.getById({segmentId: sdk.Editing.getSelection().ids[0]});
+        var convertedCoords = WazeWrap.Geometry.ConvertTo4326(segObj.geometry.coordinates[0][0], segObj.geometry.coordinates[0][1]);
         var gpsOffsetAmount = WazeWrap.Geometry.CalculateLongOffsetGPS($('#shiftAmount').val(), convertedCoords.lon, convertedCoords.lat);
         ShiftSegmentsNodesLong(segObj, gpsOffsetAmount);
         //}
@@ -730,8 +770,8 @@ normal RA color:#4cc600
         e.stopPropagation();
 
         //if(!pendingChanges){
-        var segObj = WazeWrap.getSelectedFeatures()[0];
-        var gpsOffsetAmount = WazeWrap.Geometry.CalculateLatOffsetGPS($('#shiftAmount').val(), WazeWrap.Geometry.ConvertTo4326(segObj.WW.getAttributes().geoJSONGeometry.coordinates[0][0], segObj.WW.getAttributes().geoJSONGeometry.coordinates[0][1]));
+        var segObj = sdk.DataModel.Segments.getById({segmentId: sdk.Editing.getSelection().ids[0]});
+        var gpsOffsetAmount = WazeWrap.Geometry.CalculateLatOffsetGPS($('#shiftAmount').val(), WazeWrap.Geometry.ConvertTo4326(segObj.geometry.coordinates[0][0], segObj.geometry.coordinates[0][1]));
         ShiftSegmentNodesLat(segObj, gpsOffsetAmount);
         //}
     }
@@ -741,75 +781,38 @@ normal RA color:#4cc600
         e.stopPropagation();
 
         //if(!pendingChanges){
-        var segObj = WazeWrap.getSelectedFeatures()[0];
-        var gpsOffsetAmount = WazeWrap.Geometry.CalculateLatOffsetGPS(-$('#shiftAmount').val(), WazeWrap.Geometry.ConvertTo4326(segObj.WW.getAttributes().geoJSONGeometry.coordinates[0][0], segObj.WW.getAttributes().geoJSONGeometry.coordinates[0][1]));
+        var segObj = sdk.DataModel.Segments.getById({segmentId: sdk.Editing.getSelection().ids[0]});
+        var gpsOffsetAmount = WazeWrap.Geometry.CalculateLatOffsetGPS(-$('#shiftAmount').val(), WazeWrap.Geometry.ConvertTo4326(segObj.geometry.coordinates[0][0], segObj.geometry.coordinates[0][1]));
         ShiftSegmentNodesLat(segObj, gpsOffsetAmount);
         //}
     }
 
     //*************** Roundabout Angles **********************
     function DrawRoundaboutAngles(){
-        //---------get or create layer
-        var layers = W.map.getLayersBy("uniqueName","__DrawRoundaboutAngles");
+        sdk.Map.setLayerVisibility({layerName: "__DrawRoundaboutAngles", visibility: true})
+        
+        localStorage.WMERAEnabled = sdk.Map.isLayerVisible({layerName: "__DrawRoundaboutAngles"});
 
-        if(layers.length > 0)
-            drc_layer = layers[0];
-        else {
-            let drc_style = new OpenLayers.Style({
-                fillOpacity: 0.0,
-                strokeOpacity: 1.0,
-                fillColor: "#FF40C0",
-                strokeColor: "${strokeColor}",
-                strokeWidth: 10,
-                fontWeight: "bold",
-                pointRadius: 0,
-                label : "${labelText}",
-                fontFamily: "Tahoma, Courier New",
-                labelOutlineColor: "#FFFFFF",
-                labelOutlineWidth: 3,
-                fontColor: "${labelColor}",
-                fontSize: "10px"
-            });
-
-            drc_layer = new OpenLayers.Layer.Vector("Roundabout Angles", {
-                displayInLayerSwitcher: true,
-                uniqueName: "__DrawRoundaboutAngles",
-                styleMap: new OpenLayers.StyleMap(drc_style)
-            });
-
-            I18n.translations[I18n.currentLocale()].layers.name["__DrawRoundaboutAngles"] = "Roundabout Angles";
-            W.map.addLayer(drc_layer);
-
-            drc_layer.setVisibility(true);
-        }
-
-        localStorage.WMERAEnabled = drc_layer.visibility;
-
-        if (drc_layer.visibility == false) {
-            drc_layer.removeAllFeatures();
+        if (sdk.Map.isLayerVisible({layerName: "__DrawRoundaboutAngles"}) == false) {
+            sdk.Map.removeAllFeaturesFromLayer({layerName: "__DrawRoundaboutAngles"});
             return;
         }
 
-        if (W.map.getZoom() < 1) {
-            drc_layer.removeAllFeatures();
+        if (sdk.Map.getZoomLevel() < 16) {
+            sdk.Map.removeAllFeaturesFromLayer({layerName: "__DrawRoundaboutAngles"});
             return;
         }
 
         //---------collect all roundabouts first
         var rsegments = {};
 
-        for (let iseg in W.model.segments.objects) {
-            let isegment = W.model.segments.getObjectById(iseg);
-            let iattributes = isegment.attributes;
-            let iline = isegment.getOLGeometry().id;
-
-            let irid = iattributes.junctionID;
-
-            if (iline !== null && irid != undefined) {
-                let rsegs = rsegments[irid];
-                if (rsegs == undefined)
-                    rsegments[irid] = rsegs = new Array();
-                rsegs.push(isegment);
+        for (let isegment of sdk.DataModel.Segments.getAll()) {
+            let irid = isegment.junctionId;
+            
+            if (irid) {
+                if (rsegments[irid] == undefined)
+                    rsegments[irid] = new Array();
+                rsegments[irid].push(isegment);
             }
         }
 
@@ -825,23 +828,24 @@ normal RA color:#4cc600
             let nodes_x = [];
             let nodes_y = [];
 
-            nodes = rsegs.map(seg => seg.attributes.fromNodeID); //get from nodes
-            nodes = [...nodes, ...rsegs.map(seg => seg.attributes.toNodeID)]; //get to nodes add to from nodes
+            nodes = rsegs.map(seg => seg.fromNodeId); //get from nodes
+            nodes = [...nodes, ...rsegs.map(seg => seg.toNodeId)]; //get to nodes add to from nodes
             nodes = _.uniq(nodes); //remove duplicates
 
-            let node_objects = W.model.nodes.getByIds(nodes);
-            nodes_x = node_objects.map(n => n.getOLGeometry().x); //get all x locations
-            nodes_y = node_objects.map(n => n.getOLGeometry().y); //get all y locations
+            let node_coordinates = nodes.map(nodeId => sdk.DataModel.Nodes.getById({nodeId}).geometry.coordinates);
+            // nodes_x = node_coordinates.map(coord => coord[0]); //get all x locations
+            // nodes_y = node_coordinates.map(coord => coord[1]); //get all y locations
 
             let sr_x = 0;
             let sr_y = 0;
             let radius = 0;
-            let numNodes = nodes_x.length;
+            let numNodes = node_coordinates.length;
 
             if (numNodes >= 1) {
                 let ax = nodes_x[0];
                 let ay = nodes_y[0];
-                let junction = W.model.junctions.getObjectById(irid);
+                let junction = sdk.DataModel.Junctions.getById({junctionId: parseInt(irid)});
+                let centerCoordinate = junction.geometry.coordinates;
                 //var junction_coords = junction && junction.getOLGeometry() && junction.getOLGeometry().coordinates;
 
 //                if (junction_coords && junction_coords.length == 2) {
@@ -849,8 +853,8 @@ normal RA color:#4cc600
                     //let lonlat = new OpenLayers.LonLat(junction_coords[0], junction_coords[1]);
                     //lonlat.transform(W.Config.map.projection.remote, W.Config.map.projection.local);
                     //let pt = new OpenLayers.Geometry.Point(lonlat.lon, lonlat.lat);
-                    sr_x = junction.getOLGeometry().x;
-                    sr_y = junction.getOLGeometry().y;
+                    // sr_x = junction.getOLGeometry().x;
+                    // sr_y = junction.getOLGeometry().y;
 /**                }
                 else if (numNodes >= 3) {
                     //-----------simple approximation of centre point calculated from three first points
@@ -884,25 +888,21 @@ normal RA color:#4cc600
                 let rr = -1;
                 let r_ix;
 
-                for(let i=0; i<nodes_x.length; i++) {
+                for(let i=0; i<node_coordinates.length; i++) {
 
-                    let dx = nodes_x[i] - sr_x;
-                    let dy = nodes_y[i] - sr_y;
-
-                    let rr2 = dx*dx + dy*dy;
+                    let rr2 = turf.distance(centerCoordinate, node_coordinates[i], {units: 'meters'});
                     if (rr < rr2) {
                         rr = rr2;
                         r_ix = i;
                     }
 
-                    let angle = Math.atan2(dy, dx);
-                    angle = (360.0 + (angle * 180.0 / Math.PI));
+                    let angle = turf.bearing(centerCoordinate, node_coordinates[i]);
                     if (angle < 0.0) angle += 360.0;
                     if (angle > 360.0) angle -= 360.0;
                     angles.push(angle);
                 }
 
-                radius = Math.sqrt(rr);
+                radius = rr;
 
                 //---------sorting angles for calulating angle difference between two segments
                 angles = angles.sort(function(a,b) { return a - b; });
@@ -911,22 +911,15 @@ normal RA color:#4cc600
 
                 let drc_color = (numNodes <= 4) ? "#0040FF" : "#002080";
 
-                let drc_point = new OpenLayers.Geometry.Point(sr_x, sr_y );
-                let drc_circle = new OpenLayers.Geometry.Polygon.createRegularPolygon( drc_point, radius, 10 * W.map.getZoom() );
-                let drc_feature = new OpenLayers.Feature.Vector(drc_circle, {labelText: "", labelColor: "#000000", strokeColor: drc_color, });
-                drc_features.push(drc_feature);
+                let circle = turf.circle(centerCoordinate, radius, {units: 'meters', steps: sdk.Map.getZoomLevel() * 5});
+                let circleFeature = turf.polygon(circle.geometry.coordinates, {styleName: 'roundaboutCircleStyle', layerName: '__DrawRoundaboutAngles', style: {strokeColor: drc_color}}, {id: `polygon_${centerCoordinate.toString()}_${radius}`});
+                drc_features.push(circleFeature);
 
 
-                if (numNodes >= 2 && numNodes <= 4 && W.map.getZoom() >= 5) {
-                    for(let i=0; i<nodes_x.length; i++) {
-                        let ix = nodes_x[i];
-                        let iy = nodes_y[i];
-                        let startPt   = new OpenLayers.Geometry.Point( sr_x, sr_y );
-                        let endPt     = new OpenLayers.Geometry.Point( ix, iy );
-                        let line      = new OpenLayers.Geometry.LineString([startPt, endPt]);
-                        let style     = {strokeColor:drc_color, strokeWidth:2};
-                        let fea       = new OpenLayers.Feature.Vector(line, {}, style);
-                        drc_features.push(fea);
+                if (numNodes >= 2 && numNodes <= 4 && sdk.Map.getZoomLevel() >= 5) {
+                    for(let i=0; i<node_coordinates.length; i++) {
+                        let lineFeature = turf.lineString([centerCoordinate, node_coordinates[i]], {styleName: 'roundaboutLineStyle', layerName: '__DrawRoundaboutAngles', style: {strokeColor: drc_color}}, {id: `line_${[centerCoordinate, node_coordinates[i]].toString()}`});
+                        drc_features.push(lineFeature);
                     }
 
                     let angles_int = [];
@@ -976,9 +969,8 @@ normal RA color:#4cc600
                     }
 
                     for(let i=0; i<angles.length - 1; i++) {
-                        let arad = (angles[i+0] + angles[i+1]) * 0.5 * Math.PI / 180.0;
-                        let ex = sr_x + Math.cos (arad) * radius * 0.5;
-                        let ey = sr_y + Math.sin (arad) * radius * 0.5;
+                        let labelDistance = radius / 2;
+                        let labelPoint = turf.destination(centerCoordinate, labelDistance, (angles[i+0] + angles[i+1]) * 0.5, {units: 'meters'});
 
                         //*** Angle Display Rounding ***
                         let angint = Math.round(angles_float[i] * 100)/100;
@@ -987,39 +979,27 @@ normal RA color:#4cc600
                         if (angint <= -15 || angint >= 15) kolor = "#FF0000";
                         else if (angint <= -13 || angint >= 13) kolor = "#FFC000";
 
-                        let pt = new OpenLayers.Geometry.Point(ex, ey);
-                        drc_features.push(new OpenLayers.Feature.Vector( pt, {labelText: (angint + "°"), labelColor: kolor } ));
-                        //drc_features.push(new OpenLayers.Feature.Vector( pt, {labelText: (+angles_float[i].toFixed(2) + "°"), labelColor: kolor } ));
+                        let labelFeature = turf.point(labelPoint.geometry.coordinates, {styleName: 'roundaboutLabelStyle', layerName: '__DrawRoundaboutAngles', style: {labelText: angint + "°", labelColor: kolor}}, {id: `label_${labelPoint.geometry.coordinates.toString()}`});
+                        drc_features.push(labelFeature);
                     }
                 }
                 else {
-                    for(let i=0; i < nodes_x.length; i++) {
-                        let ix = nodes_x[i];
-                        let iy = nodes_y[i];
-                        let startPt = new OpenLayers.Geometry.Point( sr_x, sr_y );
-                        let endPt = new OpenLayers.Geometry.Point( ix, iy );
-                        let line = new OpenLayers.Geometry.LineString([startPt, endPt]);
-                        let style = {strokeColor:drc_color, strokeWidth:2};
-                        let fea = new OpenLayers.Feature.Vector(line, {}, style);
-                        drc_features.push(fea);
+                    for(let i=0; i < node_coordinates.length; i++) {
+                        let lineFeature = turf.lineString([centerCoordinate, node_coordinates[i]], {styleName: 'roundaboutLineStyle', layerName: '__DrawRoundaboutAngles', style: {strokeColor: drc_color}}, {id: `line_${[centerCoordinate, node_coordinates[i]].toString()}`});
+                        drc_features.push(lineFeature);
                     }
                 }
 
-                let p1 = new OpenLayers.Geometry.Point( nodes_x[r_ix], nodes_y[r_ix] );
-                let p2 = new OpenLayers.Geometry.Point( sr_x, sr_y );
-                let line = new OpenLayers.Geometry.LineString([p1, p2]);
-                let geo_radius = line.getGeodesicLength(W.map.getProjectionObject());
-
-                let diam = geo_radius * 2.0;
-                let center_pt = new OpenLayers.Geometry.Point(sr_x, sr_y);
-                drc_features.push(new OpenLayers.Feature.Vector( center_pt, {labelText: (diam.toFixed(0) + "m"), labelColor: "#000000" } ));
+                let centerLabelFeature = turf.point(centerCoordinate, {styleName: 'roundaboutLabelStyle', layerName: '__DrawRoundaboutAngles', style: {labelText: (radius * 2.0).toFixed(0) + "m", labelColor: "#000000"}}, {id: `centerLabel_${centerCoordinate.toString()}`});
+                drc_features.push(centerLabelFeature);
 
             }
 
         }
 
-        drc_layer.removeAllFeatures();
-        drc_layer.addFeatures(drc_features);
+        console.log(drc_features)
+        sdk.Map.removeAllFeaturesFromLayer({layerName: "__DrawRoundaboutAngles"});
+        sdk.Map.addFeaturesToLayer({layerName: "__DrawRoundaboutAngles", features: drc_features});
     }
 
     function injectCss() {
@@ -1030,5 +1010,65 @@ normal RA color:#4cc600
         $('<style type="text/css">' + css + '</style>').appendTo('head');
     }
 
+    function applyRoundaboutCircleStyle(properties) {
+        return properties.styleName === "roundaboutCircleStyle" && properties.layerName === "__DrawRoundaboutAngles";
+    }
+
+    function applyRoundaboutLineStyle(properties) {
+        return properties.styleName === "roundaboutLineStyle" && properties.layerName === "__DrawRoundaboutAngles";
+    }
+
+    function applyRoundaboutLabelStyle(properties) {
+        return properties.styleName === "roundaboutLabelStyle" && properties.layerName === "__DrawRoundaboutAngles";
+    }
+
+    const styleConfig = {
+        styleContext: {
+            labelText: (context) => {
+                return context?.feature?.properties?.style?.labelText;
+            },
+            strokeColor: (context) => {
+                return context?.feature?.properties?.style?.strokeColor;
+            },
+            strokeWidth: (context) => {
+                return context?.feature?.properties?.style?.strokeWidth;
+            },
+            labelColor: (context) => {
+                return context?.feature?.properties?.style?.labelColor;
+            }
+        },
+        styleRules: [
+            {
+                predicate: applyRoundaboutCircleStyle,
+                style: {
+                    fillOpacity: 0.0,
+                    fillColor: "#FF40C0",
+                    strokeWidth: 10,
+                    strokeColor: "${strokeColor}",
+                    pointRadius: 0,
+                },
+            },
+            {
+                predicate: applyRoundaboutLineStyle,
+                style: {
+                    strokeWidth: 2,
+                    strokeColor: "${strokeColor}",
+                    pointRadius: 0,
+                },
+            },
+            {
+                predicate: applyRoundaboutLabelStyle,
+                style: {
+                    label: "${labelText}",
+                    labelOutlineColor: "#FFFFFF",
+                    labelOutlineWidth: 3,
+                    fontFamily: "Tahoma, Courier New",
+                    fontWeight: "bold",
+                    fontColor: "${labelColor}",
+                    fontSize: "10px"
+                },
+            }
+        ],
+    };
 })();
 
