@@ -294,18 +294,11 @@ normal RA color:#4cc600
 
     function saveSettingsToStorage() {
         if (localStorage) {
-            var settings = {
-                divTop: "15%",
-                divLeft: "25%",
-                Expanded: true,
-                RoundaboutAngles: true
-            };
-
-            settings.divLeft = $('#RAUtilWindow').css('left');
-            settings.divTop = $('#RAUtilWindow').css('top');
-            settings.Expanded = $("#collapser").attr('class').indexOf("fa-caret-square-o-up") > -1;
-            settings.RoundaboutAngles = $("#chkRARoundaboutAngles").is(":checked");
-            localStorage.setItem("WME_RAUtil", JSON.stringify(settings));
+            _settings.divLeft = $('#RAUtilWindow').css('left');
+            _settings.divTop = $('#RAUtilWindow').css('top');
+            _settings.Expanded = $("#collapser").attr('class').indexOf("fa-caret-square-o-up") > -1;
+            _settings.RoundaboutAngles = $("#chkRARoundaboutAngles").is(":checked");
+            localStorage.setItem("WME_RAUtil", JSON.stringify(_settings));
         }
     }
 
@@ -560,7 +553,6 @@ normal RA color:#4cc600
     function ChangeDiameter(segObj, amount){
         var RASegs = sdk.DataModel.Junctions.getById({junctionId: segObj.junctionId}).segmentIds;
         var raCenter = sdk.DataModel.Junctions.getById({junctionId: segObj.junctionId}).geometry.coordinates;
-        let { lon: centerX, lat: centerY } = WazeWrap.Geometry.ConvertTo900913(raCenter);
 
         if(checkAllEditable(RASegs)){
             var newGeometry, originalLength;
@@ -575,14 +567,11 @@ normal RA color:#4cc600
 
                     for(let j=1; j < originalLength-1; j++){
                         let pt = segObj.geometry.coordinates[j];
-                        let { lon: pointX, lat: pointY } = WazeWrap.Geometry.ConvertTo900913(pt);
-                        let h = Math.sqrt(Math.abs(Math.pow(pointX - centerX, 2) + Math.pow(pointY - centerY, 2)));
-                        let ratio = (h + amount)/h;
-                        let x = centerX + (pointX - centerX) * ratio;
-                        let y = centerY + (pointY - centerY) * ratio;
-
-                        let { lon: newX, lat: newY } = WazeWrap.Geometry.ConvertTo4326([x, y]);
-                        newGeometry.coordinates[j] = [newX, newY];
+                        let currentDistance = turf.distance(raCenter, pt, {units: 'meters'});
+                        let newDistance = currentDistance + amount;
+                        let bearing = turf.bearing(raCenter, pt);
+                        let newPoint = turf.destination(raCenter, newDistance, bearing, {units: 'meters'});
+                        newGeometry.coordinates[j] = newPoint.geometry.coordinates;
                     }
                     sdk.DataModel.Segments.updateSegment({segmentId: segObj.id, geometry: newGeometry});
 
@@ -591,14 +580,11 @@ normal RA color:#4cc600
                         node = sdk.DataModel.Nodes.getById({nodeId: segObj.fromNodeId});
 
                     var newNodeGeometry = structuredClone(node.geometry);
-                    let { lon: pointX, lat: pointY } = WazeWrap.Geometry.ConvertTo900913(newNodeGeometry.coordinates);
-                    let h = Math.sqrt(Math.abs(Math.pow(pointX - centerX, 2) + Math.pow(pointY - centerY, 2)));
-                    let ratio = (h + amount)/h;
-                    let x = centerX + (pointX - centerX) * ratio;
-                    let y = centerY + (pointY - centerY) * ratio;
-
-                    let { lon: newX, lat: newY } = WazeWrap.Geometry.ConvertTo4326([x, y]);
-                    newNodeGeometry.coordinates = [newX, newY];
+                    let currentNodeDistance = turf.distance(raCenter, newNodeGeometry.coordinates, {units: 'meters'});
+                    let newNodeDistance = currentNodeDistance + amount;
+                    let nodeBearing = turf.bearing(raCenter, newNodeGeometry.coordinates);
+                    let newNodePoint = turf.destination(raCenter, newNodeDistance, nodeBearing, {units: 'meters'});
+                    newNodeGeometry.coordinates = newNodePoint.geometry.coordinates;
 
                     var connectedSegObjs = {};
                     for(let j=0;j<node.connectedSegmentIds.length;j++){
