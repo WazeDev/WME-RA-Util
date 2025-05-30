@@ -470,10 +470,12 @@ normal RA color:#4cc600
         }
     }
 
-    function rotatePoints(origin, points, angle){
-        var lineFeature = new OpenLayers.Feature.Vector(new OpenLayers.Geometry.LineString(points),null,null);
-        lineFeature.geometry.rotate(angle, new OpenLayers.Geometry.Point(origin[0], origin[1]));
-        return [].concat(lineFeature.geometry.components);
+    function rotatePointAroundCenter(point, center, angleDegrees) {
+        const distance = turf.distance(center, point, {units: 'meters'});
+        const currentBearing = turf.bearing(center, point);
+        const newBearing = currentBearing - angleDegrees;
+        
+        return turf.destination(center, distance, newBearing, {units: 'meters'});
     }
 
     function RotateRA(segObj, angle){
@@ -491,16 +493,10 @@ normal RA color:#4cc600
                     newGeometry = structuredClone(segObj.geometry);
                     originalLength = segObj.geometry.coordinates.length;
 
-                    var center = raCenter; //WazeWrap.Geometry.ConvertTo900913(raCenter.x, raCenter.y);
-                    var segPoints = [];
-                    //Have to copy the points manually (can't use .clone()) otherwise the geometry rotation modifies the geometry of the segment itself and that hoses WME.
-                    for(let j=0; j<originalLength;j++)
-                        segPoints.push(new OpenLayers.Geometry.Point(segObj.geometry.coordinates[j][0], segObj.geometry.coordinates[j][1]));
-
-                    var newPoints = rotatePoints(center, segPoints, angle);
-
-                    for(let j=1; j<originalLength-1;j++){
-                        newGeometry.coordinates[j] = [newPoints[j].x, newPoints[j].y];
+                    for(let j=1; j<originalLength-1; j++){
+                        const currentPoint = segObj.geometry.coordinates[j];
+                        const rotatedPoint = rotatePointAroundCenter(currentPoint, raCenter, angle);
+                        newGeometry.coordinates[j] = rotatedPoint.geometry.coordinates;
                     }
 
                     sdk.DataModel.Segments.updateSegment({segmentId: segObj.id, geometry: newGeometry});
@@ -510,15 +506,11 @@ normal RA color:#4cc600
                     if(segObj.isBtoA)
                         node = sdk.DataModel.Nodes.getById({nodeId: segObj.fromNodeId});
 
-                    var nodePoints = [];
                     var newNodeGeometry = structuredClone(node.geometry);
 
-                    nodePoints.push(new OpenLayers.Geometry.Point(node.geometry.coordinates[0], node.geometry.coordinates[1]));
-                    nodePoints.push(new OpenLayers.Geometry.Point(node.geometry.coordinates[0], node.geometry.coordinates[1])); //add it twice because lines need 2 points
-
-                    gps = rotatePoints(center, nodePoints, angle);
-
-                    newNodeGeometry.coordinates = [gps[0].x, gps[0].y];
+                    const currentNodePoint = node.geometry.coordinates;
+                    const rotatedNodePoint = rotatePointAroundCenter(currentNodePoint, raCenter, angle);
+                    newNodeGeometry.coordinates = rotatedNodePoint.geometry.coordinates;
 
                     var connectedSegObjs = {};
                     for(let j=0;j<node.connectedSegmentIds.length;j++){
@@ -526,9 +518,11 @@ normal RA color:#4cc600
                         connectedSegObjs[segid] = structuredClone(sdk.DataModel.Segments.getById({segmentId: segid}).geometry);
                     }
                     sdk.DataModel.Nodes.moveNode({id: node.id, geometry: newNodeGeometry});
-                    //totalActions +=2;
                 }
                 sdk.Editing.commitTransaction('Rotated roundabout');
+                
+                if(_settings.RoundaboutAngles)
+                    DrawRoundaboutAngles();
             } catch (error) {
                 console.error(error);
                 WazeWrap.Alerts.error('WME RA Util', 'An error occured while rotating the roundabout.');
@@ -595,7 +589,6 @@ normal RA color:#4cc600
                 }
                 sdk.Editing.commitTransaction('Resized roundabout');
                 
-                console.log(_settings)
                 if(_settings.RoundaboutAngles)
                     DrawRoundaboutAngles();
             } catch (error) {
