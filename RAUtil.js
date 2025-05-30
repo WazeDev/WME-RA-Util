@@ -400,7 +400,11 @@ normal RA color:#4cc600
                     newGeometry = structuredClone(segObj.geometry);
                     originalLength = segObj.geometry.coordinates.length;
                     for(j=1; j < originalLength-1; j++){
-                        newGeometry.coordinates[j][1] += latOffset;
+                        const bearing = latOffset > 0 ? 0 : 180;
+                        const distance = Math.abs(latOffset);
+                        const currentPoint = segObj.geometry.coordinates[j];
+                        const newPoint = turf.destination(currentPoint, distance, bearing, {units: 'meters'});
+                        newGeometry.coordinates[j] = newPoint.geometry.coordinates;
                     }
                     
                     sdk.DataModel.Segments.updateSegment({segmentId: segObj.id, geometry: newGeometry});
@@ -409,7 +413,11 @@ normal RA color:#4cc600
                     if(segObj.isBtoA)
                         node = sdk.DataModel.Nodes.getById({nodeId: segObj.fromNodeId});
                     var newNodeGeometry = structuredClone(node.geometry);
-                    newNodeGeometry.coordinates[1] += latOffset;
+                    const nodeBearing = latOffset > 0 ? 0 : 180;
+                    const nodeDistance = Math.abs(latOffset);
+                    const currentNodePoint = node.geometry.coordinates;
+                    const newNodePoint = turf.destination(currentNodePoint, nodeDistance, nodeBearing, {units: 'meters'});
+                    newNodeGeometry.coordinates = newNodePoint.geometry.coordinates;
 
                     var connectedSegObjs = {};
                     for(var j=0;j<node.connectedSegmentIds.length;j++){
@@ -441,9 +449,12 @@ normal RA color:#4cc600
                     newGeometry = structuredClone(segObj.geometry);
                     originalLength = segObj.geometry.coordinates.length;
                     for(let j=1; j < originalLength-1; j++){
-                        newGeometry.coordinates[j][0] += longOffset;
+                        const bearing = longOffset > 0 ? 90 : 270;
+                        const distance = Math.abs(longOffset);
+                        const currentPoint = segObj.geometry.coordinates[j];
+                        const newPoint = turf.destination(currentPoint, distance, bearing, {units: 'meters'});
+                        newGeometry.coordinates[j] = newPoint.geometry.coordinates;
                     }
-                    
                     sdk.DataModel.Segments.updateSegment({segmentId: segObj.id, geometry: newGeometry});
 
                     var node = sdk.DataModel.Nodes.getById({nodeId: segObj.toNodeId});
@@ -451,7 +462,11 @@ normal RA color:#4cc600
                         node = sdk.DataModel.Nodes.getById({nodeId: segObj.fromNodeId});
 
                     var newNodeGeometry = structuredClone(node.geometry);
-                    newNodeGeometry.coordinates[0] += longOffset;
+                    const nodeBearing = longOffset > 0 ? 90 : 270; // East or West
+                    const nodeDistance = Math.abs(longOffset);
+                    const currentNodePoint = node.geometry.coordinates;
+                    const newNodePoint = turf.destination(currentNodePoint, nodeDistance, nodeBearing, {units: 'meters'});
+                    newNodeGeometry.coordinates = newNodePoint.geometry.coordinates;
 
                     var connectedSegObjs = {};
                     for(let j=0;j<node.connectedSegmentIds.length;j++){
@@ -724,23 +739,16 @@ normal RA color:#4cc600
         // this traps the click to prevent it falling through to the underlying area name element and potentially causing the map view to be relocated to that area...
         e.stopPropagation();
 
-        //if(!pendingChanges){
         var segObj = sdk.DataModel.Segments.getById({segmentId: sdk.Editing.getSelection().ids[0]});
-        var convertedCoords = WazeWrap.Geometry.ConvertTo4326(segObj.geometry.coordinates[0][0], segObj.geometry.coordinates[0][1]);
-        var gpsOffsetAmount = WazeWrap.Geometry.CalculateLongOffsetGPS(-$('#shiftAmount').val(), convertedCoords.lon, convertedCoords.lat);
-        ShiftSegmentsNodesLong(segObj, gpsOffsetAmount);
-        //}
+        ShiftSegmentsNodesLong(segObj, -$('#shiftAmount').val());
     }
     //Right
     function RAShiftRightBtnClick(e){
         // this traps the click to prevent it falling through to the underlying area name element and potentially causing the map view to be relocated to that area...
         e.stopPropagation();
 
-        //if(!pendingChanges){
         var segObj = sdk.DataModel.Segments.getById({segmentId: sdk.Editing.getSelection().ids[0]});
-        var convertedCoords = WazeWrap.Geometry.ConvertTo4326(segObj.geometry.coordinates[0][0], segObj.geometry.coordinates[0][1]);
-        var gpsOffsetAmount = WazeWrap.Geometry.CalculateLongOffsetGPS($('#shiftAmount').val(), convertedCoords.lon, convertedCoords.lat);
-        ShiftSegmentsNodesLong(segObj, gpsOffsetAmount);
+        ShiftSegmentsNodesLong(segObj, $('#shiftAmount').val());
         //}
     }
     //Up
@@ -748,22 +756,16 @@ normal RA color:#4cc600
         // this traps the click to prevent it falling through to the underlying area name element and potentially causing the map view to be relocated to that area...
         e.stopPropagation();
 
-        //if(!pendingChanges){
         var segObj = sdk.DataModel.Segments.getById({segmentId: sdk.Editing.getSelection().ids[0]});
-        var gpsOffsetAmount = WazeWrap.Geometry.CalculateLatOffsetGPS($('#shiftAmount').val(), WazeWrap.Geometry.ConvertTo4326(segObj.geometry.coordinates[0][0], segObj.geometry.coordinates[0][1]));
-        ShiftSegmentNodesLat(segObj, gpsOffsetAmount);
-        //}
+        ShiftSegmentNodesLat(segObj, $('#shiftAmount').val());
     }
     //Down
     function RAShiftDownBtnClick(e){
         // this traps the click to prevent it falling through to the underlying area name element and potentially causing the map view to be relocated to that area...
         e.stopPropagation();
 
-        //if(!pendingChanges){
         var segObj = sdk.DataModel.Segments.getById({segmentId: sdk.Editing.getSelection().ids[0]});
-        var gpsOffsetAmount = WazeWrap.Geometry.CalculateLatOffsetGPS(-$('#shiftAmount').val(), WazeWrap.Geometry.ConvertTo4326(segObj.geometry.coordinates[0][0], segObj.geometry.coordinates[0][1]));
-        ShiftSegmentNodesLat(segObj, gpsOffsetAmount);
-        //}
+        ShiftSegmentNodesLat(segObj, -$('#shiftAmount').val());
     }
 
     //*************** Roundabout Angles **********************
