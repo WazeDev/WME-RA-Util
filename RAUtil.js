@@ -61,10 +61,8 @@ normal RA color:#4cc600
     }
 
     function waitForWME() {
-        if (typeof W === 'undefined' || 
-            typeof getWmeSdk === 'undefined' || 
-            !unsafeWindow.SDK_INITIALIZED) {
-            setTimeout(waitForWME, 100);
+        if (!unsafeWindow.SDK_INITIALIZED) {
+            setTimeout(waitForWME, 500);
             return;
         }
         
@@ -341,12 +339,9 @@ normal RA color:#4cc600
             segObj = sdk.DataModel.Segments.getById({segmentId: RASegs[i]})
             fromNode = sdk.DataModel.Nodes.getById({nodeId: segObj.fromNodeId});
             toNode = sdk.DataModel.Nodes.getById({nodeId: segObj.toNodeId});
+            userRank = sdk.State.getUserInfo().rank;
 
             if(segObj !== "undefined"){
-                // if(fromNode && fromNode !== "undefined" && !fromNode.areConnectionsEditable())
-                //     allEditable = false;
-                // else if(toNode && toNode !== "undefined" && !toNode.areConnectionsEditable())
-                //     allEditable = false;
                 var toConnected, fromConnected;
 
                 if(toNode){
@@ -354,6 +349,8 @@ normal RA color:#4cc600
                     for(let j=0;j<toConnected.length;j++){
                         if(sdk.DataModel.Segments.getById({segmentId: toConnected[j]}) !== "undefined")
                             if(sdk.DataModel.Segments.getById({segmentId: toConnected[j]}).hasClosures)
+                                allEditable = false;
+                            if(sdk.DataModel.Segments.getById({segmentId: toConnected[j]}).lockRank > userRank)
                                 allEditable = false;
                     }
                 }
@@ -363,6 +360,8 @@ normal RA color:#4cc600
                     for(let j=0;j<fromConnected.length;j++){
                         if(sdk.DataModel.Segments.getById({segmentId: fromConnected[j]}) !== "undefined")
                             if(sdk.DataModel.Segments.getById({segmentId: fromConnected[j]}).hasClosures)
+                                allEditable = false;
+                            if(sdk.DataModel.Segments.getById({segmentId: fromConnected[j]}).lockRank > userRank)
                                 allEditable = false;
                     }
                 }
@@ -978,7 +977,6 @@ normal RA color:#4cc600
 
         }
 
-        console.log(drc_features)
         sdk.Map.removeAllFeaturesFromLayer({layerName: "__DrawRoundaboutAngles"});
         sdk.Map.addFeaturesToLayer({layerName: "__DrawRoundaboutAngles", features: drc_features});
     }
