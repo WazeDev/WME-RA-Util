@@ -306,8 +306,10 @@ normal RA color:#4cc600
                         }
                     });
                 //checkSaveChanges();
-                let segObj = sdk.DataModel.Segments.getById({ segmentId: sdk.Editing.getSelection().ids[0] });
-                allSegmentsEditable(sdk.DataModel.Junctions.getById({ junctionId: segObj.junctionId }).segmentIds);
+                const segment = sdk.DataModel.Segments.getById({ segmentId: sdk.Editing.getSelection().ids[0] });
+                const junction = sdk.DataModel.Junctions.getById({ junctionId: segment.junctionId });
+                const connectedSegments = getSegmentsFromIds(junction.segmentIds);
+                allSegmentsEditable(connectedSegments);
             }
         } else {
             $('#RAUtilWindow').css({ visibility: 'hidden' });
@@ -396,7 +398,9 @@ normal RA color:#4cc600
             try {
                 sdk.Editing.beginTransaction();
 
-                for (let segment of segments) {
+                for (let segmentId of segmentIds) {
+                    // Fetch new segment data, as we can be changing other segments by moving nodes
+                    const segment = sdk.DataModel.Segments.getById({ segmentId });
                     // Move all segment points
                     let newGeometry = structuredClone(segment.geometry);
                     const originalLength = segment.geometry.coordinates.length;
@@ -450,7 +454,9 @@ normal RA color:#4cc600
             try {
                 sdk.Editing.beginTransaction();
 
-                for (let segment of segments) {
+                for (let segmentId of segmentIds) {
+                    // Fetch new segment data, as we can be changing other segments by moving nodes
+                    const segment = sdk.DataModel.Segments.getById({ segmentId });
                     // Move segment
                     let newGeometry = structuredClone(segment.geometry);
                     const originalLength = segment.geometry.coordinates.length;
@@ -507,7 +513,9 @@ normal RA color:#4cc600
             try {
                 sdk.Editing.beginTransaction();
 
-                for (let segment of segments) {
+                for (let segmentId of segmentIds) {
+                    // Fetch new segment data, as we can be changing other segments by moving nodes
+                    const segment = sdk.DataModel.Segments.getById({ segmentId });
                     // Rotate segment
                     let newGeometry = structuredClone(segment.geometry);
                     const originalLength = segment.geometry.coordinates.length;
@@ -570,7 +578,9 @@ normal RA color:#4cc600
             try {
                 sdk.Editing.beginTransaction();
 
-                for (let segment of segments) {
+                for (let segmentId of segmentIds) {
+                    // Fetch new segment data, as we can be changing other segments by moving nodes
+                    const segment = sdk.DataModel.Segments.getById({ segmentId });
                     // Modify segment
                     let newGeometry = structuredClone(segment.geometry);
                     const originalLength = segment.geometry.coordinates.length;
