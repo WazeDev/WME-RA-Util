@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         WME RA Util
 // @namespace    https://greasyfork.org/users/30701-justins83-waze
-// @version      2025.05.30.01
+// @version      2025.05.31.01
 // @description  Providing basic utility for RA adjustment without the need to delete & recreate
 // @include      https://www.waze.com/editor*
 // @include      https://www.waze.com/*/editor*
@@ -20,19 +20,15 @@
 // @updateURL https://update.greasyfork.org/scripts/23616/WME%20RA%20Util.user.js
 // ==/UserScript==
 
-/* global W */
+/* global getWmeSdk */
+/* global initWmeSdkPlus */
 /* global WazeWrap */
-/* global OpenLayers */
-/* global require */
+/* global turf */
 /* global $ */
-/* global _ */
+/* global jQuery */
 /* global I18n */
 /* eslint curly: ["warn", "multi-or-nest"] */
 
-/*
-non-normal RA color:#FF8000
-normal RA color:#4cc600
-*/
 (function () {
     const SCRIPT_VERSION = GM_info.script.version.toString();
     const SCRIPT_NAME = GM_info.script.name;
@@ -56,7 +52,7 @@ normal RA color:#4cc600
     let roundaboutPopup = null;
     let _settings;
 
-    const updateMessage = 'Conversion to WME SDK';
+    const updateMessage = 'Conversion to WME SDK. Now uses turf for calculations and geometry.';
 
     async function bootstrap() {
         const wmeSdk = getWmeSdk({ scriptId: 'wme-ra-util', scriptName: 'WME RA Util' });
@@ -75,10 +71,8 @@ normal RA color:#4cc600
             setTimeout(waitForWME, 500);
             return;
         }
-
         unsafeWindow.SDK_INITIALIZED.then(bootstrap);
     }
-
     waitForWME();
 
     function loadScriptUpdateMonitor() {
@@ -118,7 +112,7 @@ normal RA color:#4cc600
         roundaboutPopup.style.boxShadow = '5px 5px 10px Silver';
         roundaboutPopup.style.padding = '4px';
 
-        var roundaboutPopupHTML = '<div id="header" style="padding: 4px; background-color:#92C3D3; border-radius: 5px;-moz-border-radius: 5px;-webkit-border-radius: 5px; color: white; font-weight: bold; text-align:center; letter-spacing: 1px;text-shadow: black 0.1em 0.1em 0.2em;"><img src="https://storage.googleapis.com/wazeopedia-files/1/1e/RA_Util.png" style="float:left"></img> Roundabout Utility <a data-toggle="collapse" href="#divWrappers" id="collapserLink" style="float:right"><span id="collapser" style="cursor:pointer;padding:2px;color:white;" class="fa fa-caret-square-o-up"></a></span></div>';
+        let roundaboutPopupHTML = '<div id="header" style="padding: 4px; background-color:#92C3D3; border-radius: 5px;-moz-border-radius: 5px;-webkit-border-radius: 5px; color: white; font-weight: bold; text-align:center; letter-spacing: 1px;text-shadow: black 0.1em 0.1em 0.2em;"><img src="https://storage.googleapis.com/wazeopedia-files/1/1e/RA_Util.png" style="float:left"></img> Roundabout Utility <a data-toggle="collapse" href="#divWrappers" id="collapserLink" style="float:right"><span id="collapser" style="cursor:pointer;padding:2px;color:white;" class="fa fa-caret-square-o-up"></a></span></div>';
         // start collapse // I put it al the beginning
         roundaboutPopupHTML += '<div id="divWrappers" class="collapse in">';
         //***************** Round About Angles **************************
@@ -244,8 +238,8 @@ normal RA color:#4cc600
             saveSettingsToStorage();
         });
 
-        var loadedSettings = JSON.parse(localStorage.getItem('WME_RAUtil'));
-        var defaultSettings = {
+        const loadedSettings = JSON.parse(localStorage.getItem('WME_RAUtil'));
+        const defaultSettings = {
             divTop: '15%',
             divLeft: '25%',
             expanded: true,
@@ -301,10 +295,11 @@ normal RA color:#4cc600
 
     function checkDisplayTool() {
         if (sdk.Editing.getSelection() && sdk.Editing.getSelection().objectType === 'segment') {
-            if (!allRoundaboutSegmentsSelected() || sdk.Editing.getSelection().ids.length === 0) $('#RAUtilWindow').css({ visibility: 'hidden' });
-            else {
+            if (!allRoundaboutSegmentsSelected() || sdk.Editing.getSelection().ids.length === 0) {
+                $('#RAUtilWindow').css({ visibility: 'hidden' });
+            } else {
                 $('#RAUtilWindow').css({ visibility: 'visible' });
-                if (typeof jQuery.ui !== 'undefined')
+                if (typeof jQuery.ui !== 'undefined') {
                     $('#RAUtilWindow').draggable({
                         //Gotta nuke the height setting the dragging inserts otherwise the panel cannot collapse
                         stop: () => {
@@ -312,7 +307,7 @@ normal RA color:#4cc600
                             saveSettingsToStorage();
                         }
                     });
-                //checkSaveChanges();
+                }
                 const segment = sdk.DataModel.Segments.getById({ segmentId: sdk.Editing.getSelection().ids[0] });
                 const junction = sdk.DataModel.Junctions.getById({ junctionId: segment.junctionId });
                 const connectedSegments = getSegmentsFromIds(junction.segmentIds);
@@ -320,13 +315,14 @@ normal RA color:#4cc600
             }
         } else {
             $('#RAUtilWindow').css({ visibility: 'hidden' });
-            if (typeof jQuery.ui !== 'undefined')
+            if (typeof jQuery.ui !== 'undefined') {
                 $('#RAUtilWindow').draggable({
                     stop: () => {
                         $('#RAUtilWindow').css('height', '');
                         saveSettingsToStorage();
                     }
                 });
+            }
         }
     }
 
@@ -411,7 +407,7 @@ normal RA color:#4cc600
                     // Move all segment points
                     let newGeometry = structuredClone(segment.geometry);
                     const originalLength = segment.geometry.coordinates.length;
-                    for (i = 1; i < originalLength - 1; i++) {
+                    for (let i = 1; i < originalLength - 1; i++) {
                         const bearing = offset > 0 ? DIRECTION.NORTH : DIRECTION.SOUTH;
                         const distance = Math.abs(offset);
                         const currentPoint = segment.geometry.coordinates[i];
@@ -846,7 +842,8 @@ normal RA color:#4cc600
                 );
                 layerFeatures.push(circleFeature);
 
-                if (nodeCount >= 2 && nodeCount <= 4 && sdk.Map.getZoomLevel() >= 15) {
+                if (nodeCount >= 2 && nodeCount <= 4) {
+                    //Normal roundabouts
                     for (let nodeCoordinate of nodeCoordinates) {
                         let lineFeature = turf.lineString(
                             [centerCoordinate, nodeCoordinate],
@@ -863,6 +860,7 @@ normal RA color:#4cc600
                     let anglesFloat = [];
                     let anglesSum = 0;
                     for (let i = 0; i < angles.length - 1; i++) {
+                        // Find the angle between the two nodes
                         let angle = angles[i + 1] - angles[i + 0];
                         if (angle < 0) {
                             angle += 360.0;
@@ -871,6 +869,7 @@ normal RA color:#4cc600
                             angle += 360.0;
                         }
 
+                        // Is the angle closer to 90 or 180, how many degrees off?
                         if (angle < 135.0) {
                             angle = angle - 90.0;
                         } else {
@@ -887,7 +886,8 @@ normal RA color:#4cc600
 
                     for (let i = 0; i < angles.length - 1; i++) {
                         let labelDistance = radius / 2;
-                        let labelPoint = turf.destination(centerCoordinate, labelDistance, (angles[i + 0] + angles[i + 1]) * 0.5, { units: 'meters' });
+                        let angleMidpoint = (angles[i + 0] + angles[i + 1]) * 0.5;
+                        let labelPoint = turf.destination(centerCoordinate, labelDistance, angleMidpoint, { units: 'meters' });
 
                         //*** Angle Display Rounding ***
                         let angleRounded = Math.round(anglesFloat[i] * 100) / 100;
@@ -914,6 +914,7 @@ normal RA color:#4cc600
                         layerFeatures.push(angleLabelFeature);
                     }
                 } else {
+                    // Non-normal roundabouts
                     for (let nodeCoordinate of nodeCoordinates) {
                         let lineFeature = turf.lineString(
                             [centerCoordinate, nodeCoordinate],
@@ -949,7 +950,7 @@ normal RA color:#4cc600
     }
 
     function injectCss() {
-        var css = ['.btnMoveNode {width=25px; height=25px; background-color:#92C3D3; cursor:pointer; padding:5px; font-size:14px; border:thin outset black; border-style:solid; border-width: 1px;border-radius:50%; -moz-border-radius:50%; -webkit-border-radius:50%; box-shadow:inset 0px 0px 20px -14px rgba(0,0,0,1); -moz-box-shadow:inset 0px 0px 20px -14px rgba(0,0,0,1); -webkit-box-shadow: inset 0px 0px 20px -14px rgba(0,0,0,1);}', '.btnRotate { width=45px; height=45px; background-color:#92C3D3; cursor:pointer; padding: 5px; font-size:14px; border:thin outset black; border-style:solid; border-width: 1px;border-radius: 50%;-moz-border-radius: 50%;-webkit-border-radius: 50%;box-shadow: inset 0px 0px 20px -14px rgba(0,0,0,1);-moz-box-shadow: inset 0px 0px 20px -14px rgba(0,0,0,1);-webkit-box-shadow: inset 0px 0px 20px -14px rgba(0,0,0,1);}'].join(' ');
+        const css = ['.btnMoveNode {width=25px; height=25px; background-color:#92C3D3; cursor:pointer; padding:5px; font-size:14px; border:thin outset black; border-style:solid; border-width: 1px;border-radius:50%; -moz-border-radius:50%; -webkit-border-radius:50%; box-shadow:inset 0px 0px 20px -14px rgba(0,0,0,1); -moz-box-shadow:inset 0px 0px 20px -14px rgba(0,0,0,1); -webkit-box-shadow: inset 0px 0px 20px -14px rgba(0,0,0,1);}', '.btnRotate { width=45px; height=45px; background-color:#92C3D3; cursor:pointer; padding: 5px; font-size:14px; border:thin outset black; border-style:solid; border-width: 1px;border-radius: 50%;-moz-border-radius: 50%;-webkit-border-radius: 50%;box-shadow: inset 0px 0px 20px -14px rgba(0,0,0,1);-moz-box-shadow: inset 0px 0px 20px -14px rgba(0,0,0,1);-webkit-box-shadow: inset 0px 0px 20px -14px rgba(0,0,0,1);}'].join(' ');
         $('<style type="text/css">' + css + '</style>').appendTo('head');
     }
 
