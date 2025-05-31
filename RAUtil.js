@@ -822,18 +822,13 @@ normal RA color:#4cc600
                 }
 
                 //---------sorting angles for calulating angle difference between two segments
-                console.log('======ANGLES======')
-                console.log(angles);
                 angles = angles.sort(function (a, b) {
                     return a - b;
                 });
-                console.log(angles);
                 angles.push(angles[0] + 360.0);
-                console.log(angles);
                 angles = angles.sort(function (a, b) {
                     return a - b;
                 });
-                console.log(angles);
 
                 let strokeColor = nodeCount <= 4 ? COLOR.NORMAL_LINES : COLOR.NON_NORMAL_LINES;
 
@@ -865,10 +860,8 @@ normal RA color:#4cc600
                         layerFeatures.push(lineFeature);
                     }
 
-                    let anglesInt = [];
                     let anglesFloat = [];
                     let anglesSum = 0;
-
                     for (let i = 0; i < angles.length - 1; i++) {
                         let angle = angles[i + 1] - angles[i + 0];
                         if (angle < 0) {
@@ -886,47 +879,9 @@ normal RA color:#4cc600
 
                         anglesSum += parseInt(angle);
                         anglesFloat.push(angle);
-                        anglesInt.push(parseInt(angle));
-                    }
-
-                    if (anglesSum > 45) {
-                        anglesSum -= 90;
-                    }
-                    if (anglesSum > 45) {
-                        anglesSum -= 90;
-                    }
-                    if (anglesSum > 45) {
-                        anglesSum -= 90;
-                    }
-                    if (anglesSum > 45) {
-                        anglesSum -= 90;
-                    }
-                    if (anglesSum < -45) {
-                        anglesSum += 90;
-                    }
-                    if (anglesSum < -45) {
-                        anglesSum += 90;
-                    }
-                    if (anglesSum < -45) {
-                        anglesSum += 90;
-                    }
-                    if (anglesSum < -45) {
-                        anglesSum += 90;
-                    }
-                    if (anglesSum != 0) {
-                        for (let i = 0; i < anglesInt.length; i++) {
-                            let angleInt = anglesInt[i];
-                            let angleFloat = anglesFloat[i] - anglesInt[i];
-                            if ((angleInt < 10 || angleInt > 20) && (angleFloat < -0.5 || angleFloat > 0.5)) {
-                                anglesInt[i] += -anglesSum;
-
-                                break;
-                            }
-                        }
                     }
 
                     if (nodeCount == 2) {
-                        anglesInt[1] = -anglesInt[0];
                         anglesFloat[1] = -anglesFloat[0];
                     }
 
