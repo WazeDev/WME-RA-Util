@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         WME RA Util
 // @namespace    https://greasyfork.org/users/30701-justins83-waze
-// @version      2025.05.31.01
+// @version      2025.05.31.02
 // @description  Providing basic utility for RA adjustment without the need to delete & recreate
 // @include      https://www.waze.com/editor*
 // @include      https://www.waze.com/*/editor*
@@ -17,7 +17,7 @@
 // @license      GPLv3
 // @contributionURL https://github.com/WazeDev/Thank-The-Authors
 // @downloadURL https://update.greasyfork.org/scripts/23616/WME%20RA%20Util.user.js
-// @updateURL https://update.greasyfork.org/scripts/23616/WME%20RA%20Util.user.js
+// @updateURL https://update.greasyfork.org/scripts/23616/WME%20RA%20Util.meta.js
 // ==/UserScript==
 
 /* global getWmeSdk */
@@ -77,7 +77,7 @@
 
     function loadScriptUpdateMonitor() {
         try {
-            let updateMonitor = new WazeWrap.Alerts.ScriptUpdateMonitor(SCRIPT_NAME, SCRIPT_VERSION, DOWNLOAD_URL, GM_xmlhttpRequest);
+            const updateMonitor = new WazeWrap.Alerts.ScriptUpdateMonitor(SCRIPT_NAME, SCRIPT_VERSION, DOWNLOAD_URL, GM_xmlhttpRequest);
             updateMonitor.start();
         } catch (ex) {
             // Report, but don't stop if ScriptUpdateMonitor fails.
@@ -86,8 +86,7 @@
     }
 
     function init() {
-        console.log('RA UTIL');
-        console.log(GM_info.script);
+        console.log('RA UTIL', GM_info.script);
         injectCss();
 
         sdk.Map.addLayer({
@@ -242,17 +241,17 @@
         const defaultSettings = {
             divTop: '15%',
             divLeft: '25%',
-            expanded: true,
-            showAngles: true
+            Expanded: true,
+            RoundaboutAngles: true
         };
         _settings = loadedSettings ?? defaultSettings;
 
         $('#RAUtilWindow').css('left', _settings.divLeft);
         $('#RAUtilWindow').css('top', _settings.divTop);
-        $('#chkRARoundaboutAngles').prop('checked', _settings.showAngles);
-        $('#chkRARoundaboutAngles').prop('checked', _settings.showAngles);
+        $('#chkRARoundaboutAngles').prop('checked', _settings.RoundaboutAngles);
+        $('#chkRARoundaboutAngles').prop('checked', _settings.RoundaboutAngles);
 
-        if (!_settings.expanded) {
+        if (!_settings.Expanded) {
             $('#divWrappers').hide();
             $('#collapser').removeClass('fa-caret-square-o-up');
             $('#collapser').addClass('fa-caret-square-o-down');
@@ -274,7 +273,7 @@
             }
         });
 
-        if (_settings.showAngles) {
+        if (_settings.RoundaboutAngles) {
             sdk.Events.on({ eventName: 'wme-map-zoom-changed', eventHandler: drawRoundaboutAngles });
             sdk.Events.on({ eventName: 'wme-map-move-end', eventHandler: drawRoundaboutAngles });
             drawRoundaboutAngles();
@@ -287,15 +286,15 @@
         if (localStorage) {
             _settings.divLeft = $('#RAUtilWindow').css('left');
             _settings.divTop = $('#RAUtilWindow').css('top');
-            _settings.expanded = $('#collapser').attr('class').indexOf('fa-caret-square-o-up') > -1;
-            _settings.showAngles = $('#chkRARoundaboutAngles').is(':checked');
+            _settings.Expanded = $('#collapser').attr('class').indexOf('fa-caret-square-o-up') > -1;
+            _settings.RoundaboutAngles = $('#chkRARoundaboutAngles').is(':checked');
             localStorage.setItem('WME_RAUtil', JSON.stringify(_settings));
         }
     }
 
     function checkDisplayTool() {
-        if (sdk.Editing.getSelection() && sdk.Editing.getSelection().objectType === 'segment') {
-            if (!allRoundaboutSegmentsSelected() || sdk.Editing.getSelection().ids.length === 0) {
+        if (sdk.Editing.getSelection()?.objectType === 'segment') {
+            if (!allRoundaboutSegmentsSelected()) {
                 $('#RAUtilWindow').css({ visibility: 'hidden' });
             } else {
                 $('#RAUtilWindow').css({ visibility: 'visible' });
@@ -311,7 +310,7 @@
                 const segment = sdk.DataModel.Segments.getById({ segmentId: sdk.Editing.getSelection().ids[0] });
                 const junction = sdk.DataModel.Junctions.getById({ junctionId: segment.junctionId });
                 const connectedSegments = getSegmentsFromIds(junction.segmentIds);
-                allSegmentsEditable(connectedSegments);
+                checkAndDisplaySegmentEditability(connectedSegments);
             }
         } else {
             $('#RAUtilWindow').css({ visibility: 'hidden' });
@@ -330,7 +329,7 @@
         return segmentIds.map((segmentId) => sdk.DataModel.Segments.getById({ segmentId }));
     }
 
-    function allSegmentsEditable(segments) {
+    function checkAndDisplaySegmentEditability(segments) {
         const errorElement = $('#RAEditable');
         let allEditable = true;
 
@@ -373,7 +372,7 @@
     }
 
     function allRoundaboutSegmentsSelected() {
-        for (let segmentId of sdk.Editing.getSelection().ids) {
+        for (const segmentId of sdk.Editing.getSelection().ids) {
             if (segmentId < 0 || !sdk.DataModel.Segments.getById({ segmentId: segmentId }).junctionId) {
                 return false;
             }
@@ -397,11 +396,10 @@
     function shiftRoundaboutLat(segment, offset) {
         const segmentIds = sdk.DataModel.Junctions.getById({ junctionId: segment.junctionId }).segmentIds;
         const segments = getSegmentsFromIds(segmentIds);
-        if (allSegmentsEditable(segments)) {
-            try {
-                sdk.Editing.beginTransaction();
 
-                for (let segmentId of segmentIds) {
+        if (checkAndDisplaySegmentEditability(segments)) {
+            sdk.Editing.doActions(() => {
+                for (const segmentId of segmentIds) {
                     // Fetch new segment data, as we can be changing other segments by moving nodes
                     const segment = sdk.DataModel.Segments.getById({ segmentId });
                     // Move all segment points
@@ -429,12 +427,7 @@
 
                     sdk.DataModel.Nodes.moveNode({ id: node.id, geometry: newNodeGeometry });
                 }
-                sdk.Editing.commitTransaction('Moved roundabout');
-            } catch (error) {
-                console.error(error);
-                WazeWrap.Alerts.error('WME RA Util', 'An error occured while moving the roundabout vertically.');
-                sdk.Editing.cancelTransaction();
-            }
+            }, 'Moved roundabout');
         }
     }
 
@@ -453,11 +446,10 @@
     function shiftRoundaboutLon(segment, longOffset) {
         const segmentIds = sdk.DataModel.Junctions.getById({ junctionId: segment.junctionId }).segmentIds;
         const segments = getSegmentsFromIds(segmentIds);
-        if (allSegmentsEditable(segments)) {
-            try {
-                sdk.Editing.beginTransaction();
 
-                for (let segmentId of segmentIds) {
+        if (checkAndDisplaySegmentEditability(segments)) {
+            sdk.Editing.doActions(() => {
+                for (const segmentId of segmentIds) {
                     // Fetch new segment data, as we can be changing other segments by moving nodes
                     const segment = sdk.DataModel.Segments.getById({ segmentId });
                     // Move segment
@@ -485,12 +477,7 @@
 
                     sdk.DataModel.Nodes.moveNode({ id: node.id, geometry: newNodeGeometry });
                 }
-                sdk.Editing.commitTransaction('Moved roundabout');
-            } catch (error) {
-                console.error(error);
-                WazeWrap.Alerts.error('WME RA Util', 'An error occured while moving the roundabout horizontally.');
-                sdk.Editing.cancelTransaction();
-            }
+            }, 'Moved roundabout');
         }
     }
 
@@ -512,11 +499,9 @@
         const centerCoordinates = junction.geometry.coordinates;
 
         let segments = getSegmentsFromIds(segmentIds);
-        if (allSegmentsEditable(segments)) {
-            try {
-                sdk.Editing.beginTransaction();
-
-                for (let segmentId of segmentIds) {
+        if (checkAndDisplaySegmentEditability(segments)) {
+            sdk.Editing.doActions(() => {
+                for (const segmentId of segmentIds) {
                     // Fetch new segment data, as we can be changing other segments by moving nodes
                     const segment = sdk.DataModel.Segments.getById({ segmentId });
                     // Rotate segment
@@ -538,16 +523,11 @@
                     newNodeGeometry.coordinates = rotatedNodePoint.geometry.coordinates;
                     sdk.DataModel.Nodes.moveNode({ id: node.id, geometry: newNodeGeometry });
                 }
-                sdk.Editing.commitTransaction('Rotated roundabout');
 
-                if (_settings.showAngles) {
+                if (_settings.RoundaboutAngles) {
                     drawRoundaboutAngles();
                 }
-            } catch (error) {
-                console.error(error);
-                WazeWrap.Alerts.error('WME RA Util', 'An error occured while rotating the roundabout.');
-                sdk.Editing.cancelTransaction();
-            }
+            }, 'Rotated roundabout');
         }
     }
 
@@ -577,11 +557,9 @@
         const centerCoordinates = junction.geometry.coordinates;
 
         let segments = getSegmentsFromIds(segmentIds);
-        if (allSegmentsEditable(segments)) {
-            try {
-                sdk.Editing.beginTransaction();
-
-                for (let segmentId of segmentIds) {
+        if (checkAndDisplaySegmentEditability(segments)) {
+            sdk.Editing.doActions(() => {
+                for (const segmentId of segmentIds) {
                     // Fetch new segment data, as we can be changing other segments by moving nodes
                     const segment = sdk.DataModel.Segments.getById({ segmentId });
                     // Modify segment
@@ -608,16 +586,11 @@
                     newNodeGeometry.coordinates = newNodePoint.geometry.coordinates;
                     sdk.DataModel.Nodes.moveNode({ id: node.id, geometry: newNodeGeometry });
                 }
-                sdk.Editing.commitTransaction('Resized roundabout');
 
-                if (_settings.showAngles) {
+                if (_settings.RoundaboutAngles) {
                     drawRoundaboutAngles();
                 }
-            } catch (error) {
-                console.error(error);
-                WazeWrap.Alerts.error('WME RA Util', 'An error occured while resizing the roundabout.');
-                sdk.Editing.cancelTransaction();
-            }
+            }, 'Resized roundabout');
         }
     }
 
@@ -647,15 +620,14 @@
             const nodeSegments = getSegmentsFromIds(nodeSegmentIds);
 
             let otherSegment;
-            for (let nodeSegment of nodeSegments) {
+            for (const nodeSegment of nodeSegments) {
                 if (nodeSegment.junctionId) {
                     otherSegment = nodeSegment;
                     break;
                 }
             }
 
-            try {
-                sdk.Editing.beginTransaction();
+            sdk.Editing.doActions(() => {
                 // Copy the coordinate of the geonode to be replaced with a node
                 const newNodeGeometry = {
                     type: 'Point',
@@ -680,16 +652,10 @@
                 newOtherSegmentGeometry.coordinates.splice(isANode ? newOtherSegmentGeometry.coordinates.length : 0, 0, newNodeGeometry.coordinates);
                 sdk.DataModel.Segments.updateSegment({ segmentId: otherSegment.id, geometry: newOtherSegmentGeometry });
 
-                sdk.Editing.commitTransaction('Moved roundabout node in');
-
-                if (_settings.showAngles) {
+                if (_settings.RoundaboutAngles) {
                     drawRoundaboutAngles();
                 }
-            } catch (error) {
-                console.error(error);
-                WazeWrap.Alerts.error('WME RA Util', 'An error occured while moving a node in.');
-                sdk.Editing.cancelTransaction();
-            }
+            }, 'Moved roundabout node in');
         }
     }
 
@@ -717,7 +683,7 @@
         const nodeSegments = getSegmentsFromIds(nodeSegmentIds);
 
         let otherSegment;
-        for (let nodeSegment of nodeSegments) {
+        for (const nodeSegment of nodeSegments) {
             if (nodeSegment.junctionId) {
                 otherSegment = nodeSegment;
                 break;
@@ -726,9 +692,7 @@
 
         // The other segment needs at least 3 coords (A node, one geonode and B node)
         if (otherSegment.geometry.coordinates.length > 2) {
-            try {
-                sdk.Editing.beginTransaction();
-
+            sdk.Editing.doActions(() => {
                 // Update the segment (add a geonode)
                 let newSegmentGeometry = structuredClone(segment.geometry);
                 newSegmentGeometry.coordinates.splice(isANode ? 1 : newSegmentGeometry.coordinates.length - 1, 0, node.geometry.coordinates);
@@ -751,16 +715,10 @@
                 };
                 sdk.DataModel.Nodes.moveNode({ id: node.id, geometry: newNodeGeometry });
 
-                sdk.Editing.commitTransaction('Moved roundabout node out');
-
-                if (_settings.showAngles) {
+                if (_settings.RoundaboutAngles) {
                     drawRoundaboutAngles();
                 }
-            } catch (error) {
-                console.error(error);
-                WazeWrap.Alerts.error('WME RA Util', 'An error occured while moving a node out.');
-                sdk.Editing.cancelTransaction();
-            }
+            }, 'Moved roundabout node out');
         }
     }
 
@@ -778,7 +736,7 @@
 
         //---------collect all roundabouts first
         let segmentsByJunctionId = {};
-        for (let segment of sdk.DataModel.Segments.getAll()) {
+        for (const segment of sdk.DataModel.Segments.getAll()) {
             let junctionId = segment.junctionId;
 
             if (junctionId) {
@@ -792,7 +750,7 @@
         let layerFeatures = [];
 
         //-------for each roundabout do...
-        for (let junctionId in segmentsByJunctionId) {
+        for (const junctionId in segmentsByJunctionId) {
             const junctionSegments = segmentsByJunctionId[junctionId];
             let nodes = junctionSegments.map((segment) => segment.fromNodeId); //get from nodes
             nodes.push(...junctionSegments.map((segment) => segment.toNodeId));
@@ -807,7 +765,7 @@
                 let centerCoordinate = junction.geometry.coordinates;
 
                 let angles = [];
-                for (let nodeCoordinate of nodeCoordinates) {
+                for (const nodeCoordinate of nodeCoordinates) {
                     let currentRadius = turf.distance(centerCoordinate, nodeCoordinate, { units: 'meters' });
                     if (radius < currentRadius) {
                         radius = currentRadius;
