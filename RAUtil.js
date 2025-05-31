@@ -44,6 +44,13 @@ normal RA color:#4cc600
         SOUTH: 180,
         WEST: 270
     };
+    const COLOR = {
+        NORMAL_LINES: '#0040FF',
+        NON_NORMAL_LINES: '#002080',
+        NORMAL_ANGLES: '#004000',
+        NON_NORMAL_ANGLES: '#FF0000',
+        AVOID_ANGLES: '#FFC000'
+    };
 
     let sdk;
     let roundaboutPopup = null;
@@ -763,181 +770,164 @@ normal RA color:#4cc600
 
     //*************** Roundabout Angles **********************
     function drawRoundaboutAngles() {
-        sdk.Map.setLayerVisibility({ layerName: '__DrawRoundaboutAngles', visibility: true });
-
-        localStorage.WMERAEnabled = sdk.Map.isLayerVisible({ layerName: '__DrawRoundaboutAngles' });
-
         if (sdk.Map.isLayerVisible({ layerName: '__DrawRoundaboutAngles' }) == false) {
             sdk.Map.removeAllFeaturesFromLayer({ layerName: '__DrawRoundaboutAngles' });
             return;
         }
 
-        if (sdk.Map.getZoomLevel() < 16) {
+        if (sdk.Map.getZoomLevel() < 15) {
             sdk.Map.removeAllFeaturesFromLayer({ layerName: '__DrawRoundaboutAngles' });
             return;
         }
 
         //---------collect all roundabouts first
-        var rsegments = {};
+        let segmentsByJunctionId = {};
+        for (let segment of sdk.DataModel.Segments.getAll()) {
+            let junctionId = segment.junctionId;
 
-        for (let isegment of sdk.DataModel.Segments.getAll()) {
-            let irid = isegment.junctionId;
-
-            if (irid) {
-                if (rsegments[irid] == undefined) rsegments[irid] = new Array();
-                rsegments[irid].push(isegment);
+            if (junctionId) {
+                if (!segmentsByJunctionId[junctionId]) {
+                    segmentsByJunctionId[junctionId] = [];
+                }
+                segmentsByJunctionId[junctionId].push(segment);
             }
         }
 
-        var drc_features = [];
+        let layerFeatures = [];
 
         //-------for each roundabout do...
-        for (let irid in rsegments) {
-            let rsegs = rsegments[irid];
+        for (let junctionId in segmentsByJunctionId) {
+            const junctionSegments = segmentsByJunctionId[junctionId];
+            let nodes = junctionSegments.map((segment) => segment.fromNodeId); //get from nodes
+            nodes.push(...junctionSegments.map((segment) => segment.toNodeId));
+            nodes = [...new Set(nodes)]; //remove duplicates
+            const nodeCoordinates = nodes.map((nodeId) => sdk.DataModel.Nodes.getById({ nodeId }).geometry.coordinates);
 
-            let isegment = rsegs[0];
+            let radius = -1;
+            const nodeCount = nodeCoordinates.length;
 
-            let nodes = [];
-            let nodes_x = [];
-            let nodes_y = [];
-
-            nodes = rsegs.map((seg) => seg.fromNodeId); //get from nodes
-            nodes = [...nodes, ...rsegs.map((seg) => seg.toNodeId)]; //get to nodes add to from nodes
-            nodes = _.uniq(nodes); //remove duplicates
-
-            let node_coordinates = nodes.map((nodeId) => sdk.DataModel.Nodes.getById({ nodeId }).geometry.coordinates);
-            // nodes_x = node_coordinates.map(coord => coord[0]); //get all x locations
-            // nodes_y = node_coordinates.map(coord => coord[1]); //get all y locations
-
-            let sr_x = 0;
-            let sr_y = 0;
-            let radius = 0;
-            let numNodes = node_coordinates.length;
-
-            if (numNodes >= 1) {
-                let ax = nodes_x[0];
-                let ay = nodes_y[0];
-                let junction = sdk.DataModel.Junctions.getById({ junctionId: parseInt(irid) });
+            if (nodeCount >= 1) {
+                const junction = sdk.DataModel.Junctions.getById({ junctionId: parseInt(junctionId) });
                 let centerCoordinate = junction.geometry.coordinates;
-                //var junction_coords = junction && junction.getOLGeometry() && junction.getOLGeometry().coordinates;
-
-                //                if (junction_coords && junction_coords.length == 2) {
-                //---------- get center point from junction model
-                //let lonlat = new OpenLayers.LonLat(junction_coords[0], junction_coords[1]);
-                //lonlat.transform(W.Config.map.projection.remote, W.Config.map.projection.local);
-                //let pt = new OpenLayers.Geometry.Point(lonlat.lon, lonlat.lat);
-                // sr_x = junction.getOLGeometry().x;
-                // sr_y = junction.getOLGeometry().y;
-                /**                }
-                else if (numNodes >= 3) {
-                    //-----------simple approximation of centre point calculated from three first points
-                    let bx = nodes_x[1];
-                    let by = nodes_y[1];
-                    let cx = nodes_x[2];
-                    let cy = nodes_y[2];
-
-                    let x1 = (bx + ax) * 0.5;
-                    let y11 = (by + ay) * 0.5;
-                    let dy1 = bx - ax;
-                    let dx1 = -(by - ay);
-                    let x2 = (cx + bx) * 0.5;
-                    let y2 = (cy + by) * 0.5;
-                    let dy2 = cx - bx;
-                    let dx2 = -(cy - by);
-                    sr_x = (y11 * dx1 * dx2 + x2 * dx1 * dy2 - x1 * dy1 * dx2 - y2 * dx1 * dx2)/ (dx1 * dy2 - dy1 * dx2);
-                    sr_y = (sr_x - x1) * dy1 / dx1 + y11;
-                }
-                else {
-                    //---------- simple bounds-based calculation of center point
-                    var rbounds = new OpenLayers.Bounds();
-                    rbounds.extend(isegment.getOLGeometry().bounds);
-
-                    var center = rbounds.getCenterPixel();
-                    sr_x = center.x;
-                    sr_y = center.y;
-                }**/
 
                 let angles = [];
-                let rr = -1;
-                let r_ix;
-
-                for (let i = 0; i < node_coordinates.length; i++) {
-                    let rr2 = turf.distance(centerCoordinate, node_coordinates[i], { units: 'meters' });
-                    if (rr < rr2) {
-                        rr = rr2;
-                        r_ix = i;
+                for (let nodeCoordinate of nodeCoordinates) {
+                    let currentRadius = turf.distance(centerCoordinate, nodeCoordinate, { units: 'meters' });
+                    if (radius < currentRadius) {
+                        radius = currentRadius;
                     }
 
-                    let angle = turf.bearing(centerCoordinate, node_coordinates[i]);
-                    if (angle < 0.0) angle += 360.0;
-                    if (angle > 360.0) angle -= 360.0;
+                    let angle = turf.bearing(centerCoordinate, nodeCoordinate);
                     angles.push(angle);
                 }
 
-                radius = rr;
-
                 //---------sorting angles for calulating angle difference between two segments
+                console.log('======ANGLES======')
+                console.log(angles);
                 angles = angles.sort(function (a, b) {
                     return a - b;
                 });
+                console.log(angles);
                 angles.push(angles[0] + 360.0);
+                console.log(angles);
                 angles = angles.sort(function (a, b) {
                     return a - b;
                 });
+                console.log(angles);
 
-                let drc_color = numNodes <= 4 ? '#0040FF' : '#002080';
+                let strokeColor = nodeCount <= 4 ? COLOR.NORMAL_LINES : COLOR.NON_NORMAL_LINES;
 
                 let circle = turf.circle(centerCoordinate, radius, { units: 'meters', steps: sdk.Map.getZoomLevel() * 5 });
-                let circleFeature = turf.polygon(circle.geometry.coordinates, { styleName: 'roundaboutCircleStyle', layerName: '__DrawRoundaboutAngles', style: { strokeColor: drc_color } }, { id: `polygon_${centerCoordinate.toString()}_${radius}` });
-                drc_features.push(circleFeature);
+                let circleFeature = turf.polygon(
+                    circle.geometry.coordinates,
+                    {
+                        styleName: 'roundaboutCircleStyle',
+                        layerName: '__DrawRoundaboutAngles',
+                        style: {
+                            strokeColor
+                        }
+                    },
+                    { id: `polygon_${centerCoordinate.toString()}_${radius}` }
+                );
+                layerFeatures.push(circleFeature);
 
-                if (numNodes >= 2 && numNodes <= 4 && sdk.Map.getZoomLevel() >= 5) {
-                    for (let i = 0; i < node_coordinates.length; i++) {
-                        let lineFeature = turf.lineString([centerCoordinate, node_coordinates[i]], { styleName: 'roundaboutLineStyle', layerName: '__DrawRoundaboutAngles', style: { strokeColor: drc_color } }, { id: `line_${[centerCoordinate, node_coordinates[i]].toString()}` });
-                        drc_features.push(lineFeature);
+                if (nodeCount >= 2 && nodeCount <= 4 && sdk.Map.getZoomLevel() >= 15) {
+                    for (let nodeCoordinate of nodeCoordinates) {
+                        let lineFeature = turf.lineString(
+                            [centerCoordinate, nodeCoordinate],
+                            {
+                                styleName: 'roundaboutLineStyle',
+                                layerName: '__DrawRoundaboutAngles',
+                                style: { strokeColor }
+                            },
+                            { id: `line_${[centerCoordinate, nodeCoordinate].toString()}` }
+                        );
+                        layerFeatures.push(lineFeature);
                     }
 
-                    let angles_int = [];
-                    let angles_float = [];
-                    let angles_sum = 0;
+                    let anglesInt = [];
+                    let anglesFloat = [];
+                    let anglesSum = 0;
 
                     for (let i = 0; i < angles.length - 1; i++) {
-                        let ang = angles[i + 1] - angles[i + 0];
-                        if (ang < 0) ang += 360.0;
-                        if (ang < 0) ang += 360.0;
+                        let angle = angles[i + 1] - angles[i + 0];
+                        if (angle < 0) {
+                            angle += 360.0;
+                        }
+                        if (angle < 0) {
+                            angle += 360.0;
+                        }
 
-                        if (ang < 135.0) ang = ang - 90.0;
-                        else ang = ang - 180.0;
+                        if (angle < 135.0) {
+                            angle = angle - 90.0;
+                        } else {
+                            angle = angle - 180.0;
+                        }
 
-                        angles_sum += parseInt(ang);
-
-                        angles_float.push(ang);
-                        angles_int.push(parseInt(ang));
+                        anglesSum += parseInt(angle);
+                        anglesFloat.push(angle);
+                        anglesInt.push(parseInt(angle));
                     }
 
-                    if (angles_sum > 45) angles_sum -= 90;
-                    if (angles_sum > 45) angles_sum -= 90;
-                    if (angles_sum > 45) angles_sum -= 90;
-                    if (angles_sum > 45) angles_sum -= 90;
-                    if (angles_sum < -45) angles_sum += 90;
-                    if (angles_sum < -45) angles_sum += 90;
-                    if (angles_sum < -45) angles_sum += 90;
-                    if (angles_sum < -45) angles_sum += 90;
-                    if (angles_sum != 0) {
-                        for (let i = 0; i < angles_int.length; i++) {
-                            let a = angles_int[i];
-                            let af = angles_float[i] - angles_int[i];
-                            if ((a < 10 || a > 20) && (af < -0.5 || af > 0.5)) {
-                                angles_int[i] += -angles_sum;
+                    if (anglesSum > 45) {
+                        anglesSum -= 90;
+                    }
+                    if (anglesSum > 45) {
+                        anglesSum -= 90;
+                    }
+                    if (anglesSum > 45) {
+                        anglesSum -= 90;
+                    }
+                    if (anglesSum > 45) {
+                        anglesSum -= 90;
+                    }
+                    if (anglesSum < -45) {
+                        anglesSum += 90;
+                    }
+                    if (anglesSum < -45) {
+                        anglesSum += 90;
+                    }
+                    if (anglesSum < -45) {
+                        anglesSum += 90;
+                    }
+                    if (anglesSum < -45) {
+                        anglesSum += 90;
+                    }
+                    if (anglesSum != 0) {
+                        for (let i = 0; i < anglesInt.length; i++) {
+                            let angleInt = anglesInt[i];
+                            let angleFloat = anglesFloat[i] - anglesInt[i];
+                            if ((angleInt < 10 || angleInt > 20) && (angleFloat < -0.5 || angleFloat > 0.5)) {
+                                anglesInt[i] += -anglesSum;
 
                                 break;
                             }
                         }
                     }
 
-                    if (numNodes == 2) {
-                        angles_int[1] = -angles_int[0];
-                        angles_float[1] = -angles_float[0];
+                    if (nodeCount == 2) {
+                        anglesInt[1] = -anglesInt[0];
+                        anglesFloat[1] = -anglesFloat[0];
                     }
 
                     for (let i = 0; i < angles.length - 1; i++) {
@@ -945,29 +935,62 @@ normal RA color:#4cc600
                         let labelPoint = turf.destination(centerCoordinate, labelDistance, (angles[i + 0] + angles[i + 1]) * 0.5, { units: 'meters' });
 
                         //*** Angle Display Rounding ***
-                        let angint = Math.round(angles_float[i] * 100) / 100;
+                        let angleRounded = Math.round(anglesFloat[i] * 100) / 100;
 
-                        let kolor = '#004000';
-                        if (angint <= -15 || angint >= 15) kolor = '#FF0000';
-                        else if (angint <= -13 || angint >= 13) kolor = '#FFC000';
+                        let labelColor = COLOR.NORMAL_ANGLES;
+                        if (angleRounded <= -15 || angleRounded >= 15) {
+                            labelColor = COLOR.NON_NORMAL_ANGLES;
+                        } else if (angleRounded <= -13 || angleRounded >= 13) {
+                            labelColor = COLOR.AVOID_ANGLES;
+                        }
 
-                        let labelFeature = turf.point(labelPoint.geometry.coordinates, { styleName: 'roundaboutLabelStyle', layerName: '__DrawRoundaboutAngles', style: { labelText: angint + '°', labelColor: kolor } }, { id: `label_${labelPoint.geometry.coordinates.toString()}` });
-                        drc_features.push(labelFeature);
+                        let angleLabelFeature = turf.point(
+                            labelPoint.geometry.coordinates,
+                            {
+                                styleName: 'roundaboutLabelStyle',
+                                layerName: '__DrawRoundaboutAngles',
+                                style: {
+                                    labelText: angleRounded + '°',
+                                    labelColor: labelColor
+                                }
+                            },
+                            { id: `label_${labelPoint.geometry.coordinates.toString()}` }
+                        );
+                        layerFeatures.push(angleLabelFeature);
                     }
                 } else {
-                    for (let i = 0; i < node_coordinates.length; i++) {
-                        let lineFeature = turf.lineString([centerCoordinate, node_coordinates[i]], { styleName: 'roundaboutLineStyle', layerName: '__DrawRoundaboutAngles', style: { strokeColor: drc_color } }, { id: `line_${[centerCoordinate, node_coordinates[i]].toString()}` });
-                        drc_features.push(lineFeature);
+                    for (let nodeCoordinate of nodeCoordinates) {
+                        let lineFeature = turf.lineString(
+                            [centerCoordinate, nodeCoordinate],
+                            {
+                                styleName: 'roundaboutLineStyle',
+                                layerName: '__DrawRoundaboutAngles',
+                                style: { strokeColor }
+                            },
+                            { id: `line_${[centerCoordinate, nodeCoordinates].toString()}` }
+                        );
+                        layerFeatures.push(lineFeature);
                     }
                 }
 
-                let centerLabelFeature = turf.point(centerCoordinate, { styleName: 'roundaboutLabelStyle', layerName: '__DrawRoundaboutAngles', style: { labelText: (radius * 2.0).toFixed(0) + 'm', labelColor: '#000000' } }, { id: `centerLabel_${centerCoordinate.toString()}` });
-                drc_features.push(centerLabelFeature);
+                let centerLabelFeature = turf.point(
+                    centerCoordinate,
+                    {
+                        styleName: 'roundaboutLabelStyle',
+                        layerName: '__DrawRoundaboutAngles',
+                        style: {
+                            labelText: (radius * 2.0).toFixed(0) + 'm',
+                            labelColor: '#000000'
+                        }
+                    },
+                    { id: `centerLabel_${centerCoordinate.toString()}` }
+                );
+                layerFeatures.push(centerLabelFeature);
             }
         }
 
         sdk.Map.removeAllFeaturesFromLayer({ layerName: '__DrawRoundaboutAngles' });
-        sdk.Map.addFeaturesToLayer({ layerName: '__DrawRoundaboutAngles', features: drc_features });
+        sdk.Map.addFeaturesToLayer({ layerName: '__DrawRoundaboutAngles', features: layerFeatures });
     }
 
     function injectCss() {
@@ -1007,7 +1030,6 @@ normal RA color:#4cc600
                 predicate: applyRoundaboutCircleStyle,
                 style: {
                     fillOpacity: 0.0,
-                    fillColor: '#FF40C0',
                     strokeWidth: 10,
                     strokeColor: '${strokeColor}',
                     pointRadius: 0
