@@ -8,7 +8,6 @@
 // @include      https://beta.waze.com/*
 // @exclude      https://www.waze.com/user/editor*
 // @require      https://greasyfork.org/scripts/24851-wazewrap/code/WazeWrap.js
-// @require      https://cdn.jsdelivr.net/gh/WazeSpace/wme-sdk-plus@latest/wme-sdk-plus.js
 // @require      https://cdn.jsdelivr.net/npm/@turf/turf@7.2.0/turf.min.js
 // @connect      greasyfork.org
 // @author       JustinS83
@@ -21,7 +20,6 @@
 // ==/UserScript==
 
 /* global getWmeSdk */
-/* global initWmeSdkPlus */
 /* global WazeWrap */
 /* global turf */
 /* global $ */
@@ -55,27 +53,38 @@
     const updateMessage = 'Conversion to WME SDK. Now uses turf for calculations and geometry.';
 
     async function bootstrap() {
-        const wmeSdk = getWmeSdk({ scriptId: 'wme-ra-util', scriptName: 'WME RA Util' });
-        const sdkPlus = await initWmeSdkPlus(wmeSdk, {
-            hooks: ['Editing.Transactions']
-        });
-        sdk = sdkPlus || wmeSdk;
+        sdk = getWmeSdk({ scriptId: 'wme-ra-util', scriptName: 'WME RA Util' });
         sdk.Events.once({ eventName: 'wme-ready' }).then(() => {
             loadScriptUpdateMonitor();
             init();
         });
     }
 
-    function waitForWME() {
-        if (!unsafeWindow.SDK_INITIALIZED) {
-            setTimeout(waitForWME, 500);
+    function waitForWME(tries = 1) {
+        if (tries > 1000) {
+            return;
             return;
         }
+
+        if (!unsafeWindow.SDK_INITIALIZED) {
+            setTimeout(() => waitForWME(++tries), 200);
+            return;
+        }
+
         unsafeWindow.SDK_INITIALIZED.then(bootstrap);
     }
     waitForWME();
 
-    function loadScriptUpdateMonitor() {
+    function loadScriptUpdateMonitor(tries = 1) {
+        if (tries > 1000) {
+            return;
+        }
+
+        if (!WazeWrap.Ready) {
+            setTimeout(() => loadScriptUpdateMonitor(++tries), 200);
+            return;
+        }
+
         try {
             const updateMonitor = new WazeWrap.Alerts.ScriptUpdateMonitor(SCRIPT_NAME, SCRIPT_VERSION, DOWNLOAD_URL, GM_xmlhttpRequest);
             updateMonitor.start();
@@ -398,36 +407,34 @@
         const segments = getSegmentsFromIds(segmentIds);
 
         if (checkAndDisplaySegmentEditability(segments)) {
-            sdk.Editing.doActions(() => {
-                for (const segmentId of segmentIds) {
-                    // Fetch new segment data, as we can be changing other segments by moving nodes
-                    const segment = sdk.DataModel.Segments.getById({ segmentId });
-                    // Move all segment points
-                    let newGeometry = structuredClone(segment.geometry);
-                    const originalLength = segment.geometry.coordinates.length;
-                    for (let i = 1; i < originalLength - 1; i++) {
-                        const bearing = offset > 0 ? DIRECTION.NORTH : DIRECTION.SOUTH;
-                        const distance = Math.abs(offset);
-                        const currentPoint = segment.geometry.coordinates[i];
-                        const newPoint = turf.destination(currentPoint, distance, bearing, { units: 'meters' });
-                        newGeometry.coordinates[i] = newPoint.geometry.coordinates;
-                    }
-                    sdk.DataModel.Segments.updateSegment({ segmentId: segment.id, geometry: newGeometry });
-
-                    //Move node
-                    const nodeId = segment.isAtoB ? segment.toNodeId : segment.fromNodeId;
-                    const node = sdk.DataModel.Nodes.getById({ nodeId });
-                    let newNodeGeometry = structuredClone(node.geometry);
-
-                    const nodeBearing = offset > 0 ? DIRECTION.NORTH : DIRECTION.SOUTH;
-                    const nodeDistance = Math.abs(offset);
-                    const currentNodePoint = node.geometry.coordinates;
-                    const newNodePoint = turf.destination(currentNodePoint, nodeDistance, nodeBearing, { units: 'meters' });
-                    newNodeGeometry.coordinates = newNodePoint.geometry.coordinates;
-
-                    sdk.DataModel.Nodes.moveNode({ id: node.id, geometry: newNodeGeometry });
+            for (const segmentId of segmentIds) {
+                // Fetch new segment data, as we can be changing other segments by moving nodes
+                const segment = sdk.DataModel.Segments.getById({ segmentId });
+                // Move all segment points
+                let newGeometry = structuredClone(segment.geometry);
+                const originalLength = segment.geometry.coordinates.length;
+                for (let i = 1; i < originalLength - 1; i++) {
+                    const bearing = offset > 0 ? DIRECTION.NORTH : DIRECTION.SOUTH;
+                    const distance = Math.abs(offset);
+                    const currentPoint = segment.geometry.coordinates[i];
+                    const newPoint = turf.destination(currentPoint, distance, bearing, { units: 'meters' });
+                    newGeometry.coordinates[i] = newPoint.geometry.coordinates;
                 }
-            }, 'Moved roundabout');
+                sdk.DataModel.Segments.updateSegment({ segmentId: segment.id, geometry: newGeometry });
+
+                //Move node
+                const nodeId = segment.isAtoB ? segment.toNodeId : segment.fromNodeId;
+                const node = sdk.DataModel.Nodes.getById({ nodeId });
+                let newNodeGeometry = structuredClone(node.geometry);
+
+                const nodeBearing = offset > 0 ? DIRECTION.NORTH : DIRECTION.SOUTH;
+                const nodeDistance = Math.abs(offset);
+                const currentNodePoint = node.geometry.coordinates;
+                const newNodePoint = turf.destination(currentNodePoint, nodeDistance, nodeBearing, { units: 'meters' });
+                newNodeGeometry.coordinates = newNodePoint.geometry.coordinates;
+
+                sdk.DataModel.Nodes.moveNode({ id: node.id, geometry: newNodeGeometry });
+            }
         }
     }
 
@@ -448,36 +455,34 @@
         const segments = getSegmentsFromIds(segmentIds);
 
         if (checkAndDisplaySegmentEditability(segments)) {
-            sdk.Editing.doActions(() => {
-                for (const segmentId of segmentIds) {
-                    // Fetch new segment data, as we can be changing other segments by moving nodes
-                    const segment = sdk.DataModel.Segments.getById({ segmentId });
-                    // Move segment
-                    let newGeometry = structuredClone(segment.geometry);
-                    const originalLength = segment.geometry.coordinates.length;
-                    for (let i = 1; i < originalLength - 1; i++) {
-                        const bearing = longOffset > 0 ? DIRECTION.EAST : DIRECTION.WEST;
-                        const distance = Math.abs(longOffset);
-                        const currentPoint = segment.geometry.coordinates[i];
-                        const newPoint = turf.destination(currentPoint, distance, bearing, { units: 'meters' });
-                        newGeometry.coordinates[i] = newPoint.geometry.coordinates;
-                    }
-                    sdk.DataModel.Segments.updateSegment({ segmentId: segment.id, geometry: newGeometry });
-
-                    // Move node
-                    const nodeId = segment.isAtoB ? segment.toNodeId : segment.fromNodeId;
-                    const node = sdk.DataModel.Nodes.getById({ nodeId });
-                    let newNodeGeometry = structuredClone(node.geometry);
-
-                    const nodeBearing = longOffset > 0 ? DIRECTION.EAST : DIRECTION.WEST;
-                    const nodeDistance = Math.abs(longOffset);
-                    const currentNodePoint = node.geometry.coordinates;
-                    const newNodePoint = turf.destination(currentNodePoint, nodeDistance, nodeBearing, { units: 'meters' });
-                    newNodeGeometry.coordinates = newNodePoint.geometry.coordinates;
-
-                    sdk.DataModel.Nodes.moveNode({ id: node.id, geometry: newNodeGeometry });
+            for (const segmentId of segmentIds) {
+                // Fetch new segment data, as we can be changing other segments by moving nodes
+                const segment = sdk.DataModel.Segments.getById({ segmentId });
+                // Move segment
+                let newGeometry = structuredClone(segment.geometry);
+                const originalLength = segment.geometry.coordinates.length;
+                for (let i = 1; i < originalLength - 1; i++) {
+                    const bearing = longOffset > 0 ? DIRECTION.EAST : DIRECTION.WEST;
+                    const distance = Math.abs(longOffset);
+                    const currentPoint = segment.geometry.coordinates[i];
+                    const newPoint = turf.destination(currentPoint, distance, bearing, { units: 'meters' });
+                    newGeometry.coordinates[i] = newPoint.geometry.coordinates;
                 }
-            }, 'Moved roundabout');
+                sdk.DataModel.Segments.updateSegment({ segmentId: segment.id, geometry: newGeometry });
+
+                // Move node
+                const nodeId = segment.isAtoB ? segment.toNodeId : segment.fromNodeId;
+                const node = sdk.DataModel.Nodes.getById({ nodeId });
+                let newNodeGeometry = structuredClone(node.geometry);
+
+                const nodeBearing = longOffset > 0 ? DIRECTION.EAST : DIRECTION.WEST;
+                const nodeDistance = Math.abs(longOffset);
+                const currentNodePoint = node.geometry.coordinates;
+                const newNodePoint = turf.destination(currentNodePoint, nodeDistance, nodeBearing, { units: 'meters' });
+                newNodeGeometry.coordinates = newNodePoint.geometry.coordinates;
+
+                sdk.DataModel.Nodes.moveNode({ id: node.id, geometry: newNodeGeometry });
+            }
         }
     }
 
@@ -500,34 +505,32 @@
 
         let segments = getSegmentsFromIds(segmentIds);
         if (checkAndDisplaySegmentEditability(segments)) {
-            sdk.Editing.doActions(() => {
-                for (const segmentId of segmentIds) {
-                    // Fetch new segment data, as we can be changing other segments by moving nodes
-                    const segment = sdk.DataModel.Segments.getById({ segmentId });
-                    // Rotate segment
-                    let newGeometry = structuredClone(segment.geometry);
-                    const originalLength = segment.geometry.coordinates.length;
-                    for (let i = 1; i < originalLength - 1; i++) {
-                        const currentPoint = segment.geometry.coordinates[i];
-                        const rotatedPoint = rotatePointAroundCenter(currentPoint, centerCoordinates, angle);
-                        newGeometry.coordinates[i] = rotatedPoint.geometry.coordinates;
-                    }
-                    sdk.DataModel.Segments.updateSegment({ segmentId: segment.id, geometry: newGeometry });
-
-                    // Rotate nodes
-                    const nodeId = segment.isAtoB ? segment.toNodeId : segment.fromNodeId;
-                    const node = sdk.DataModel.Nodes.getById({ nodeId });
-                    let newNodeGeometry = structuredClone(node.geometry);
-                    const currentNodePoint = node.geometry.coordinates;
-                    const rotatedNodePoint = rotatePointAroundCenter(currentNodePoint, centerCoordinates, angle);
-                    newNodeGeometry.coordinates = rotatedNodePoint.geometry.coordinates;
-                    sdk.DataModel.Nodes.moveNode({ id: node.id, geometry: newNodeGeometry });
+            for (const segmentId of segmentIds) {
+                // Fetch new segment data, as we can be changing other segments by moving nodes
+                const segment = sdk.DataModel.Segments.getById({ segmentId });
+                // Rotate segment
+                let newGeometry = structuredClone(segment.geometry);
+                const originalLength = segment.geometry.coordinates.length;
+                for (let i = 1; i < originalLength - 1; i++) {
+                    const currentPoint = segment.geometry.coordinates[i];
+                    const rotatedPoint = rotatePointAroundCenter(currentPoint, centerCoordinates, angle);
+                    newGeometry.coordinates[i] = rotatedPoint.geometry.coordinates;
                 }
+                sdk.DataModel.Segments.updateSegment({ segmentId: segment.id, geometry: newGeometry });
 
-                if (_settings.RoundaboutAngles) {
-                    drawRoundaboutAngles();
-                }
-            }, 'Rotated roundabout');
+                // Rotate nodes
+                const nodeId = segment.isAtoB ? segment.toNodeId : segment.fromNodeId;
+                const node = sdk.DataModel.Nodes.getById({ nodeId });
+                let newNodeGeometry = structuredClone(node.geometry);
+                const currentNodePoint = node.geometry.coordinates;
+                const rotatedNodePoint = rotatePointAroundCenter(currentNodePoint, centerCoordinates, angle);
+                newNodeGeometry.coordinates = rotatedNodePoint.geometry.coordinates;
+                sdk.DataModel.Nodes.moveNode({ id: node.id, geometry: newNodeGeometry });
+            }
+
+            if (_settings.RoundaboutAngles) {
+                drawRoundaboutAngles();
+            }
         }
     }
 
@@ -558,39 +561,37 @@
 
         let segments = getSegmentsFromIds(segmentIds);
         if (checkAndDisplaySegmentEditability(segments)) {
-            sdk.Editing.doActions(() => {
-                for (const segmentId of segmentIds) {
-                    // Fetch new segment data, as we can be changing other segments by moving nodes
-                    const segment = sdk.DataModel.Segments.getById({ segmentId });
-                    // Modify segment
-                    let newGeometry = structuredClone(segment.geometry);
-                    const originalLength = segment.geometry.coordinates.length;
-                    for (let i = 1; i < originalLength - 1; i++) {
-                        const currentPoint = segment.geometry.coordinates[i];
-                        const currentDistance = turf.distance(centerCoordinates, currentPoint, { units: 'meters' });
-                        const newDistance = currentDistance + amount;
-                        let bearing = turf.bearing(centerCoordinates, currentPoint);
-                        let newPoint = turf.destination(centerCoordinates, newDistance, bearing, { units: 'meters' });
-                        newGeometry.coordinates[i] = newPoint.geometry.coordinates;
-                    }
-                    sdk.DataModel.Segments.updateSegment({ segmentId: segment.id, geometry: newGeometry });
-
-                    // Move node
-                    const nodeId = segment.isAtoB ? segment.toNodeId : segment.fromNodeId;
-                    const node = sdk.DataModel.Nodes.getById({ nodeId });
-                    let newNodeGeometry = structuredClone(node.geometry);
-                    const currentNodeDistance = turf.distance(centerCoordinates, newNodeGeometry.coordinates, { units: 'meters' });
-                    const newNodeDistance = currentNodeDistance + amount;
-                    const nodeBearing = turf.bearing(centerCoordinates, newNodeGeometry.coordinates);
-                    const newNodePoint = turf.destination(centerCoordinates, newNodeDistance, nodeBearing, { units: 'meters' });
-                    newNodeGeometry.coordinates = newNodePoint.geometry.coordinates;
-                    sdk.DataModel.Nodes.moveNode({ id: node.id, geometry: newNodeGeometry });
+            for (const segmentId of segmentIds) {
+                // Fetch new segment data, as we can be changing other segments by moving nodes
+                const segment = sdk.DataModel.Segments.getById({ segmentId });
+                // Modify segment
+                let newGeometry = structuredClone(segment.geometry);
+                const originalLength = segment.geometry.coordinates.length;
+                for (let i = 1; i < originalLength - 1; i++) {
+                    const currentPoint = segment.geometry.coordinates[i];
+                    const currentDistance = turf.distance(centerCoordinates, currentPoint, { units: 'meters' });
+                    const newDistance = currentDistance + amount;
+                    let bearing = turf.bearing(centerCoordinates, currentPoint);
+                    let newPoint = turf.destination(centerCoordinates, newDistance, bearing, { units: 'meters' });
+                    newGeometry.coordinates[i] = newPoint.geometry.coordinates;
                 }
+                sdk.DataModel.Segments.updateSegment({ segmentId: segment.id, geometry: newGeometry });
 
-                if (_settings.RoundaboutAngles) {
-                    drawRoundaboutAngles();
-                }
-            }, 'Resized roundabout');
+                // Move node
+                const nodeId = segment.isAtoB ? segment.toNodeId : segment.fromNodeId;
+                const node = sdk.DataModel.Nodes.getById({ nodeId });
+                let newNodeGeometry = structuredClone(node.geometry);
+                const currentNodeDistance = turf.distance(centerCoordinates, newNodeGeometry.coordinates, { units: 'meters' });
+                const newNodeDistance = currentNodeDistance + amount;
+                const nodeBearing = turf.bearing(centerCoordinates, newNodeGeometry.coordinates);
+                const newNodePoint = turf.destination(centerCoordinates, newNodeDistance, nodeBearing, { units: 'meters' });
+                newNodeGeometry.coordinates = newNodePoint.geometry.coordinates;
+                sdk.DataModel.Nodes.moveNode({ id: node.id, geometry: newNodeGeometry });
+            }
+
+            if (_settings.RoundaboutAngles) {
+                drawRoundaboutAngles();
+            }
         }
     }
 
@@ -627,35 +628,33 @@
                 }
             }
 
-            sdk.Editing.doActions(() => {
-                // Copy the coordinate of the geonode to be replaced with a node
-                const newNodeGeometry = {
-                    type: 'Point',
-                    coordinates: structuredClone(segment.geometry.coordinates[isANode ? 1 : segment.geometry.coordinates.length - 2])
-                };
+            // Copy the coordinate of the geonode to be replaced with a node
+            const newNodeGeometry = {
+                type: 'Point',
+                coordinates: structuredClone(segment.geometry.coordinates[isANode ? 1 : segment.geometry.coordinates.length - 2])
+            };
 
-                // Update the segment (remove a geonode)
-                let newSegmentGeometry = structuredClone(segment.geometry);
-                newSegmentGeometry.coordinates.splice(isANode ? 1 : newSegmentGeometry.coordinates.length - 2, 1);
-                sdk.DataModel.Segments.updateSegment({ segmentId: segment.id, geometry: newSegmentGeometry });
+            // Update the segment (remove a geonode)
+            let newSegmentGeometry = structuredClone(segment.geometry);
+            newSegmentGeometry.coordinates.splice(isANode ? 1 : newSegmentGeometry.coordinates.length - 2, 1);
+            sdk.DataModel.Segments.updateSegment({ segmentId: segment.id, geometry: newSegmentGeometry });
 
-                // Move node
-                sdk.DataModel.Nodes.moveNode({ id: node.id, geometry: newNodeGeometry });
+            // Move node
+            sdk.DataModel.Nodes.moveNode({ id: node.id, geometry: newNodeGeometry });
 
-                // The other segment will be the opposite of A or B
-                if ((otherSegment.isBtoA && !segment.isBtoA) || (!otherSegment.isBtoA && segment.isBtoA)) {
-                    isANode = !isANode;
-                }
+            // The other segment will be the opposite of A or B
+            if ((otherSegment.isBtoA && !segment.isBtoA) || (!otherSegment.isBtoA && segment.isBtoA)) {
+                isANode = !isANode;
+            }
 
-                // Update the other segment (add a geonode)
-                let newOtherSegmentGeometry = structuredClone(otherSegment.geometry);
-                newOtherSegmentGeometry.coordinates.splice(isANode ? newOtherSegmentGeometry.coordinates.length : 0, 0, newNodeGeometry.coordinates);
-                sdk.DataModel.Segments.updateSegment({ segmentId: otherSegment.id, geometry: newOtherSegmentGeometry });
+            // Update the other segment (add a geonode)
+            let newOtherSegmentGeometry = structuredClone(otherSegment.geometry);
+            newOtherSegmentGeometry.coordinates.splice(isANode ? newOtherSegmentGeometry.coordinates.length : 0, 0, newNodeGeometry.coordinates);
+            sdk.DataModel.Segments.updateSegment({ segmentId: otherSegment.id, geometry: newOtherSegmentGeometry });
 
-                if (_settings.RoundaboutAngles) {
-                    drawRoundaboutAngles();
-                }
-            }, 'Moved roundabout node in');
+            if (_settings.RoundaboutAngles) {
+                drawRoundaboutAngles();
+            }
         }
     }
 
@@ -692,33 +691,31 @@
 
         // The other segment needs at least 3 coords (A node, one geonode and B node)
         if (otherSegment.geometry.coordinates.length > 2) {
-            sdk.Editing.doActions(() => {
-                // Update the segment (add a geonode)
-                let newSegmentGeometry = structuredClone(segment.geometry);
-                newSegmentGeometry.coordinates.splice(isANode ? 1 : newSegmentGeometry.coordinates.length - 1, 0, node.geometry.coordinates);
-                sdk.DataModel.Segments.updateSegment({ segmentId: segment.id, geometry: newSegmentGeometry });
+            // Update the segment (add a geonode)
+            let newSegmentGeometry = structuredClone(segment.geometry);
+            newSegmentGeometry.coordinates.splice(isANode ? 1 : newSegmentGeometry.coordinates.length - 1, 0, node.geometry.coordinates);
+            sdk.DataModel.Segments.updateSegment({ segmentId: segment.id, geometry: newSegmentGeometry });
 
-                // The other segment will be the opposite of A or B
-                if ((otherSegment.isBtoA && !segment.isBtoA) || (!otherSegment.isBtoA && segment.isBtoA)) {
-                    isANode = !isANode;
-                }
+            // The other segment will be the opposite of A or B
+            if ((otherSegment.isBtoA && !segment.isBtoA) || (!otherSegment.isBtoA && segment.isBtoA)) {
+                isANode = !isANode;
+            }
 
-                // Update the other segment (remove a geonode)
-                let newOtherSegmentGeometry = structuredClone(otherSegment.geometry);
-                newOtherSegmentGeometry.coordinates.splice(isANode ? -2 : 1, 1);
-                sdk.DataModel.Segments.updateSegment({ segmentId: otherSegment.id, geometry: newOtherSegmentGeometry });
+            // Update the other segment (remove a geonode)
+            let newOtherSegmentGeometry = structuredClone(otherSegment.geometry);
+            newOtherSegmentGeometry.coordinates.splice(isANode ? -2 : 1, 1);
+            sdk.DataModel.Segments.updateSegment({ segmentId: otherSegment.id, geometry: newOtherSegmentGeometry });
 
-                // Move the node
-                const newNodeGeometry = {
-                    type: 'Point',
-                    coordinates: structuredClone(otherSegment.geometry.coordinates[isANode ? otherSegment.geometry.coordinates.length - 2 : 1])
-                };
-                sdk.DataModel.Nodes.moveNode({ id: node.id, geometry: newNodeGeometry });
+            // Move the node
+            const newNodeGeometry = {
+                type: 'Point',
+                coordinates: structuredClone(otherSegment.geometry.coordinates[isANode ? otherSegment.geometry.coordinates.length - 2 : 1])
+            };
+            sdk.DataModel.Nodes.moveNode({ id: node.id, geometry: newNodeGeometry });
 
-                if (_settings.RoundaboutAngles) {
-                    drawRoundaboutAngles();
-                }
-            }, 'Moved roundabout node out');
+            if (_settings.RoundaboutAngles) {
+                drawRoundaboutAngles();
+            }
         }
     }
 
