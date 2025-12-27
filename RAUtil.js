@@ -52,39 +52,36 @@
 
     const updateMessage = 'Conversion to WME SDK. Now uses turf for calculations and geometry.';
 
-    async function bootstrap() {
-        sdk = getWmeSdk({ scriptId: 'wme-ra-util', scriptName: 'WME RA Util' });
-        sdk.Events.once({ eventName: 'wme-ready' }).then(() => {
-            loadScriptUpdateMonitor();
-            init();
+    function waitUntil(callback, interval = 200, timeout = 60000) {
+        return new Promise((resolve, reject) => {
+            const start = Date.now();
+            const timer = setInterval(() => {
+                if (callback()) {
+                    clearInterval(timer);
+                    resolve();
+                } else if (Date.now() - start > timeout) {
+                    clearInterval(timer);
+                    reject(new Error(`${SCRIPT_NAME} bootstrap timeout`));
+                }
+            }, interval);
         });
     }
 
-    function waitForWME(tries = 1) {
-        if (tries > 1000) {
-            return;
-            return;
-        }
+    async function bootstrap() {
+        await waitUntil(() => unsafeWindow?.SDK_INITIALIZED);
+        await unsafeWindow.SDK_INITIALIZED;
 
-        if (!unsafeWindow.SDK_INITIALIZED) {
-            setTimeout(() => waitForWME(++tries), 200);
-            return;
-        }
+        sdk = getWmeSdk({ scriptId: 'wme-ra-util', scriptName: 'WME RA Util' });
+        await sdk.Events.once({ eventName: 'wme-ready' });
 
-        unsafeWindow.SDK_INITIALIZED.then(bootstrap);
+        await waitUntil(() => WazeWrap?.Ready);
+        
+        loadScriptUpdateMonitor();
+        init();
     }
-    waitForWME();
+    bootstrap();
 
-    function loadScriptUpdateMonitor(tries = 1) {
-        if (tries > 1000) {
-            return;
-        }
-
-        if (!WazeWrap.Ready) {
-            setTimeout(() => loadScriptUpdateMonitor(++tries), 200);
-            return;
-        }
-
+    function loadScriptUpdateMonitor() {
         try {
             const updateMonitor = new WazeWrap.Alerts.ScriptUpdateMonitor(SCRIPT_NAME, SCRIPT_VERSION, DOWNLOAD_URL, GM_xmlhttpRequest);
             updateMonitor.start();
