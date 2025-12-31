@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         WME RA Util
 // @namespace    https://greasyfork.org/users/30701-justins83-waze
-// @version      2025.05.31.02
+// @version      2025.12.30.01
 // @description  Providing basic utility for RA adjustment without the need to delete & recreate
 // @include      https://www.waze.com/editor*
 // @include      https://www.waze.com/*/editor*
@@ -50,7 +50,7 @@
     let roundaboutPopup = null;
     let _settings;
 
-    const updateMessage = 'Conversion to WME SDK. Now uses turf for calculations and geometry.';
+    const updateMessage = 'Conversion to WME SDK. Now uses turf for calculations and geometry.  Thank you to lacmac for undertaking this conversion, and the others that have reviewed and added their insight.';
 
     function waitUntil(callback, interval = 200, timeout = 60000) {
         return new Promise((resolve, reject) => {
@@ -61,14 +61,13 @@
                     resolve();
                 } else if (Date.now() - start > timeout) {
                     clearInterval(timer);
-                    reject(new Error(`${SCRIPT_NAME} bootstrap timeout`));
+                    reject(new Error(`${SCRIPT_NAME} timeout waiting for object`));
                 }
             }, interval);
         });
     }
 
     async function bootstrap() {
-        await waitUntil(() => unsafeWindow?.SDK_INITIALIZED);
         await unsafeWindow.SDK_INITIALIZED;
 
         sdk = getWmeSdk({ scriptId: 'wme-ra-util', scriptName: 'WME RA Util' });
@@ -191,16 +190,16 @@
         // Button A
         roundaboutPopupHTML += '<div style="text-align:center; font-size:18px;">A Node';
         // Move node IN
-        roundaboutPopupHTML += '<p><span id="btnMoveANodeIn" class="btnMoveNode" style="color: white; font-size: 0.875em; text-shadow: black 0.1em 0.1em 0.2em; padding:3px 15px 3px 15px; margin:3px;">in</span>';
+        roundaboutPopupHTML += '<p><span id="btnMoveANodeIn" class="btnMoveNode" style="color: white; font-size: 0.875em; text-shadow: black 0.1em 0.1em 0.2em; padding:3px 15px 3px 15px; margin:3px; user-select:none;">in</span>';
         // Move node OUT
-        roundaboutPopupHTML += '<span id="btnMoveANodeOut" class="btnMoveNode" class="btnMoveNode" style="color: white; font-size: 0.875em; text-shadow: black 0.1em 0.1em 0.2em; padding:3px 10px 3px 10px; margin:3px;">out</span>';
+        roundaboutPopupHTML += '<span id="btnMoveANodeOut" class="btnMoveNode" class="btnMoveNode" style="color: white; font-size: 0.875em; text-shadow: black 0.1em 0.1em 0.2em; padding:3px 10px 3px 10px; margin:3px; user-select:none;">out</span>';
         roundaboutPopupHTML += '</div>';
         // Button B
         roundaboutPopupHTML += '<div style="text-align:center; font-size:18px;">B Node';
         // Move node IN
-        roundaboutPopupHTML += '<p><span id="btnMoveBNodeIn" class="btnMoveNode" style="color: white; font-size: 0.875em; text-shadow: black 0.1em 0.1em 0.2em; padding:3px 15px 3px 15px; margin:3px;">in</span>';
+        roundaboutPopupHTML += '<p><span id="btnMoveBNodeIn" class="btnMoveNode" style="color: white; font-size: 0.875em; text-shadow: black 0.1em 0.1em 0.2em; padding:3px 15px 3px 15px; margin:3px; user-select:none;">in</span>';
         // Move node OUT
-        roundaboutPopupHTML += '<span id="btnMoveBNodeOut" class="btnMoveNode" class="btnMoveNode" style="color: white; font-size: 0.875em; text-shadow: black 0.1em 0.1em 0.2em; padding:3px 10px 3px 10px; margin:3px;">out</span>';
+        roundaboutPopupHTML += '<span id="btnMoveBNodeOut" class="btnMoveNode" class="btnMoveNode" style="color: white; font-size: 0.875em; text-shadow: black 0.1em 0.1em 0.2em; padding:3px 10px 3px 10px; margin:3px; user-select:none;">out</span>';
         roundaboutPopupHTML += '</div>';
         roundaboutPopupHTML += '</div></div></div>';
 
