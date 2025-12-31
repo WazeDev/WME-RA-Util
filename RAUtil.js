@@ -1,66 +1,88 @@
 // ==UserScript==
 // @name         WME RA Util
 // @namespace    https://greasyfork.org/users/30701-justins83-waze
-// @version      2025.03.3.01
+// @version      2025.12.30.01
 // @description  Providing basic utility for RA adjustment without the need to delete & recreate
 // @include      https://www.waze.com/editor*
 // @include      https://www.waze.com/*/editor*
 // @include      https://beta.waze.com/*
 // @exclude      https://www.waze.com/user/editor*
 // @require      https://greasyfork.org/scripts/24851-wazewrap/code/WazeWrap.js
+// @require      https://cdn.jsdelivr.net/npm/@turf/turf@7.2.0/turf.min.js
 // @connect      greasyfork.org
 // @author       JustinS83
 // @grant        GM_xmlhttpRequest
+// @grant        unsafeWindow
 // @license      GPLv3
 // @contributionURL https://github.com/WazeDev/Thank-The-Authors
 // @downloadURL https://update.greasyfork.org/scripts/23616/WME%20RA%20Util.user.js
 // @updateURL https://update.greasyfork.org/scripts/23616/WME%20RA%20Util.meta.js
 // ==/UserScript==
 
-/* global W */
+/* global getWmeSdk */
 /* global WazeWrap */
-/* global OpenLayers */
-/* global require */
+/* global turf */
 /* global $ */
-/* global _ */
+/* global jQuery */
 /* global I18n */
 /* eslint curly: ["warn", "multi-or-nest"] */
 
-/*
-non-normal RA color:#FF8000
-normal RA color:#4cc600
-*/
-(function() {
-
-    var RAUtilWindow = null;
-    var UpdateSegmentGeometry;
-    var MoveNode, MultiAction;
-    var drc_layer;
-	let wEvents;
+(function () {
     const SCRIPT_VERSION = GM_info.script.version.toString();
     const SCRIPT_NAME = GM_info.script.name;
     const DOWNLOAD_URL = GM_info.scriptUpdateURL;
 
-    //var totalActions = 0;
-    var _settings;
-    const updateMessage = "Removed debugger lines.  No more waa waas";
+    const DIRECTION = {
+        NORTH: 0,
+        EAST: 90,
+        SOUTH: 180,
+        WEST: 270
+    };
+    const COLOR = {
+        NORMAL_LINES: '#0040FF',
+        NON_NORMAL_LINES: '#002080',
+        NORMAL_ANGLES: '#004000',
+        NON_NORMAL_ANGLES: '#FF0000',
+        AVOID_ANGLES: '#FFC000'
+    };
 
-    function bootstrap(tries = 1) {
+    let sdk;
+    let roundaboutPopup = null;
+    let _settings;
 
-        if (W && W.map && W.model && require && WazeWrap.Ready){
-            loadScriptUpdateMonitor();
-            init();
-        }
-        else if (tries < 1000)
-            setTimeout(function () {bootstrap(++tries);}, 200);
+    const updateMessage = 'Conversion to WME SDK. Now uses turf for calculations and geometry.  Thank you to lacmac for undertaking this conversion, and the others that have reviewed and added their insight.';
+
+    function waitUntil(callback, interval = 200, timeout = 60000) {
+        return new Promise((resolve, reject) => {
+            const start = Date.now();
+            const timer = setInterval(() => {
+                if (callback()) {
+                    clearInterval(timer);
+                    resolve();
+                } else if (Date.now() - start > timeout) {
+                    clearInterval(timer);
+                    reject(new Error(`${SCRIPT_NAME} timeout waiting for object`));
+                }
+            }, interval);
+        });
     }
 
+    async function bootstrap() {
+        await unsafeWindow.SDK_INITIALIZED;
+
+        sdk = getWmeSdk({ scriptId: 'wme-ra-util', scriptName: 'WME RA Util' });
+        await sdk.Events.once({ eventName: 'wme-ready' });
+
+        await waitUntil(() => WazeWrap?.Ready);
+        
+        loadScriptUpdateMonitor();
+        init();
+    }
     bootstrap();
 
     function loadScriptUpdateMonitor() {
-        let updateMonitor;
         try {
-            updateMonitor = new WazeWrap.Alerts.ScriptUpdateMonitor(SCRIPT_NAME, SCRIPT_VERSION, DOWNLOAD_URL, GM_xmlhttpRequest);
+            const updateMonitor = new WazeWrap.Alerts.ScriptUpdateMonitor(SCRIPT_NAME, SCRIPT_VERSION, DOWNLOAD_URL, GM_xmlhttpRequest);
             updateMonitor.start();
         } catch (ex) {
             // Report, but don't stop if ScriptUpdateMonitor fails.
@@ -68,967 +90,878 @@ normal RA color:#4cc600
         }
     }
 
-    function init(){
+    function init() {
+        console.log('RA UTIL', GM_info.script);
         injectCss();
-        UpdateSegmentGeometry = require('Waze/Action/UpdateSegmentGeometry');
-        MoveNode = require("Waze/Action/MoveNode");
-        MultiAction = require("Waze/Action/MultiAction");
 
-        console.log("RA UTIL");
-        console.log(GM_info.script);
-        if(W.map.events)
-		    wEvents = W.map.events;
-	    else
-		    wEvents = W.map.getMapEventsListener();
+        sdk.Map.addLayer({
+            layerName: '__DrawRoundaboutAngles',
+            styleRules: styleConfig.styleRules,
+            styleContext: styleConfig.styleContext
+        });
+        sdk.Map.setLayerVisibility({ layerName: '__DrawRoundaboutAngles', visibility: true });
 
-        RAUtilWindow = document.createElement('div');
-        RAUtilWindow.id = "RAUtilWindow";
-        RAUtilWindow.style.position = 'fixed';
-        RAUtilWindow.style.visibility = 'hidden';
-        RAUtilWindow.style.top = '15%';
-        RAUtilWindow.style.left = '25%';
-        RAUtilWindow.style.width = '510px';
-        RAUtilWindow.style.zIndex = 100;
-        RAUtilWindow.style.backgroundColor = '#FFFFFE';
-        RAUtilWindow.style.borderWidth = '0px';
-        RAUtilWindow.style.borderStyle = 'solid';
-        RAUtilWindow.style.borderRadius = '10px';
-        RAUtilWindow.style.boxShadow = '5px 5px 10px Silver';
-        RAUtilWindow.style.padding = '4px';
+        roundaboutPopup = document.createElement('div');
+        roundaboutPopup.id = 'RAUtilWindow';
+        roundaboutPopup.style.position = 'fixed';
+        roundaboutPopup.style.visibility = 'hidden';
+        roundaboutPopup.style.top = '15%';
+        roundaboutPopup.style.left = '25%';
+        roundaboutPopup.style.width = '510px';
+        roundaboutPopup.style.zIndex = 100;
+        roundaboutPopup.style.backgroundColor = '#FFFFFE';
+        roundaboutPopup.style.borderWidth = '0px';
+        roundaboutPopup.style.borderStyle = 'solid';
+        roundaboutPopup.style.borderRadius = '10px';
+        roundaboutPopup.style.boxShadow = '5px 5px 10px Silver';
+        roundaboutPopup.style.padding = '4px';
 
-        var alertsHTML = '<div id="header" style="padding: 4px; background-color:#92C3D3; border-radius: 5px;-moz-border-radius: 5px;-webkit-border-radius: 5px; color: white; font-weight: bold; text-align:center; letter-spacing: 1px;text-shadow: black 0.1em 0.1em 0.2em;"><img src="https://storage.googleapis.com/wazeopedia-files/1/1e/RA_Util.png" style="float:left"></img> Roundabout Utility <a data-toggle="collapse" href="#divWrappers" id="collapserLink" style="float:right"><span id="collapser" style="cursor:pointer;padding:2px;color:white;" class="fa fa-caret-square-o-up"></a></span></div>';
+        let roundaboutPopupHTML = '<div id="header" style="padding: 4px; background-color:#92C3D3; border-radius: 5px;-moz-border-radius: 5px;-webkit-border-radius: 5px; color: white; font-weight: bold; text-align:center; letter-spacing: 1px;text-shadow: black 0.1em 0.1em 0.2em;"><img src="https://storage.googleapis.com/wazeopedia-files/1/1e/RA_Util.png" style="float:left"></img> Roundabout Utility <a data-toggle="collapse" href="#divWrappers" id="collapserLink" style="float:right"><span id="collapser" style="cursor:pointer;padding:2px;color:white;" class="fa fa-caret-square-o-up"></a></span></div>';
         // start collapse // I put it al the beginning
-      alertsHTML += '<div id="divWrappers" class="collapse in">';
-         //***************** Round About Angles **************************
-         alertsHTML += '<p style="margin: 10px 0px 0px 20px;"><input type="checkbox" id="chkRARoundaboutAngles">&nbsp;Enable Roundabout Angles</p>';
-         //***************** Shift Amount **************************
-         // Define BOX
-         alertsHTML += '<div id="contentShift" style="text-align:center;float:left; width: 120px;max-width: 24%;height: 170px;margin: 1em 5px 0px 0px;opacity:1;border-radius: 2px;-moz-border-radius: 2px;-webkit-border-radius: 4px;border-width:1px;border-style:solid;border-color:#92C3D3;padding:2px;}">';
-         alertsHTML += '<b>Shift amount</b></br><input type="text" name="shiftAmount" id="shiftAmount" size="1" style="float: left; text-align: center;font: inherit; line-height: normal; width: 30px; height: 20px; margin: 5px 4px; box-sizing: border-box; display: block; padding-left: 0; border-bottom-color: rgba(black,.3); background: transparent; outline: none; color: black;" value="1"/> <div style="margin: 5px 4px;">Meter(s)';
-            // Shift amount controls
-            alertsHTML += '<div id="controls" style="text-align:center; padding:06px 4px;width=100px; height=100px;margin: 5px 0px;border-style:solid; border-width: 2px;border-radius: 50%;-moz-border-radius: 50%;-webkit-border-radius: 50%;box-shadow: inset 0px 0px 50px -14px rgba(0,0,0,1);-moz-box-shadow: inset 0px 0px 50px -14px rgba(0,0,0,1);-webkit-box-shadow: inset 0px 0px 50px -14px rgba(0,0,0,1); background:#92C3D3;align:center;">';
-            //Single Shift Up Button
-            alertsHTML += '<span id="RAShiftUpBtn" style="cursor:pointer;font-size:14px;">';
-            alertsHTML += '<i class="fa fa-angle-double-up fa-2x" style="color: white; text-shadow: black 0.1em 0.1em 0.2em; vertical-align: top;"> </i>';
-            alertsHTML += '<span id="UpBtnCaption" style="font-weight: bold;"></span>';
-            alertsHTML += '</span><br>';
-            //Single Shift Left Button
-            alertsHTML += '<span id="RAShiftLeftBtn" style="cursor:pointer;font-size:14px;margin-left:-40px;">';
-            alertsHTML += '<i class="fa fa-angle-double-left fa-2x" style="color: white; text-shadow: black 0.1em 0.1em 0.2em; vertical-align: middle"> </i>';
-            alertsHTML += '<span id="LeftBtnCaption" style="font-weight: bold;"></span>';
-            alertsHTML += '</span>';
-            //Single Shift Right Button
-            alertsHTML += '<span id="RAShiftRightBtn" style="float: right;cursor:pointer;font-size:14px;margin-right:5px;">';
-            alertsHTML += '<i class="fa fa-angle-double-right fa-2x" style="color: white;text-shadow: black 0.1em 0.1em 0.2em;  vertical-align: middle"> </i>';
-            alertsHTML += '<span id="RightBtnCaption" style="font-weight: bold;"></span>';
-            alertsHTML += '</span><br>';
-            //Single Shift Down Button
-            alertsHTML += '<span id="RAShiftDownBtn" style="cursor:pointer;font-size:14px;margin-top:0px;">';
-            alertsHTML += '<i class="fa fa-angle-double-down fa-2x" style="color: white;text-shadow: black 0.1em 0.1em 0.2em;  vertical-align: middle"> </i>';
-            alertsHTML += '<span id="DownBtnCaption" style="font-weight: bold;"></span>';
-            alertsHTML += '</span>';
-         alertsHTML += '</div></div></div>';
-         //***************** Rotation **************************
-         // Define BOX
-         alertsHTML += '<div id="contentRotate" style="float:left; text-align: center;width: 120px;max-width: 24%;max-height:145px;margin: 1em auto;opacity:1;border-radius: 2px;-moz-border-radius: 2px;-webkit-border-radius: 4px;border-width:1px;border-style:solid;border-color:#92C3D3;padding:2px;  display:inline-block; border-style:solid; border-width:1px; height:152px;  margin-right:5px;">';
-         alertsHTML += '<b>Rotation amount</b></br><input type="text" name="rotationAmount" id="rotationAmount" size="1" style="float: left; text-align: center;font: inherit; line-height: normal; width: 30px; height: 20px; margin: 5px 4px; box-sizing: border-box; display: block; padding-left: 0; border-bottom-color: rgba(black,.3); background: transparent; outline: none; color: black;" value="1"/> <div style="margin: 5px 4px;">Degree(s)';
-            // Rotation controls
-            alertsHTML += '<div id="rotationControls" style="padding: 6px 4px;width=100px; margin: 20px 0px 50px 0px;align:center;">';
-               // Rotate Button on the Left
-               alertsHTML += '<span id="RARotateLeftBtn" class="btnRotate" style="float: left;">';
-               alertsHTML += '<i class="fa fa-undo fa-2x" style="color: white; text-shadow: black 0.1em 0.1em 0.2em; padding:2px;"> </i>';
-               alertsHTML += '<span id="RotateLeftBtnCaption" style="font-weight: bold;"></span>';
-               alertsHTML += '</span>';
-               // Rotate button on the Right
-               alertsHTML += '<span id="RARotateRightBtn" class="btnRotate" style="float: right;">';
-               alertsHTML += '<i class="fa fa-repeat fa-2x" style="color: white; text-shadow: black 0.1em 0.1em 0.2em; padding:2px;"> </i>';
-               alertsHTML += '<span id="RotateRightBtnCaption" style="font-weight: bold;"></span>';
-         alertsHTML += '</div></div></div>';
-         //********************* Diameter change ******************
-         // Define BOX
-         alertsHTML += '<div id="diameterChange" style="float:left; text-align: center;width: 120px;max-width: 24%;max-height:145px;margin: 1em auto;opacity:1;border-radius: 2px;-moz-border-radius: 2px;-webkit-border-radius: 4px;border-width:1px;border-style:solid;border-color:#92C3D3;padding:2px;  display:inline-block; border-style:solid; border-width:1px; height:152px;  margin-right:5px;">';
-         alertsHTML += '<b>Change diameter</b></br></br>';
-              // Diameter Change controls
-            alertsHTML += '<div id="DiameterChangeControls" style="padding: 6px 4px;width=100px; margin: 5px 7px 50px 7px;align:center;">';
-               // Decrease Button
-               alertsHTML += '<span id="diameterChangeDecreaseBtn" style="float: left; width=45px; height=45px; background-color:#92C3D3; cursor:pointer; padding: 5px; font-size:14px; border:thin outset black; border-style:solid; border-width: 1px;border-radius: 50%;-moz-border-radius: 50%;-webkit-border-radius: 50%;box-shadow: inset 0px 0px 20px -14px rgba(0,0,0,1);-moz-box-shadow: inset 0px 0px 20px -14px rgba(0,0,0,1);-webkit-box-shadow: inset 0px 0px 20px -14px rgba(0,0,0,1);">';
-               alertsHTML += '<i class="fa fa-compress fa-2x" style="color: white; text-shadow: black 0.1em 0.1em 0.2em; padding:2px;;"> </i>';
-               alertsHTML += '<span id="diameterChangeDecreaseCaption" style="font-weight: bold;"></span>';
-               alertsHTML += '</span>';
-               // Increase Button
-               alertsHTML += '<span id="diameterChangeIncreaseBtn" style="float: right; width=45px; height=45px; background-color:#92C3D3; cursor:pointer; padding: 5px; font-size:14px; border:thin outset black; border-style:solid; border-width: 1px;border-radius: 50%;-moz-border-radius: 50%;-webkit-border-radius: 50%;box-shadow: inset 0px 0px 20px -14px rgba(0,0,0,1);-moz-box-shadow: inset 0px 0px 20px -14px rgba(0,0,0,1);-webkit-box-shadow: inset 0px 0px 20px -14px rgba(0,0,0,1);">';
-               alertsHTML += '<i class="fa fa-arrows-alt fa-2x" style="color: white; text-shadow: black 0.1em 0.1em 0.2em; padding:2px;"> </i>';
-               alertsHTML += '<span id="diameterChangeIncreaseCaption" style="font-weight: bold;"></span>';
-               alertsHTML += '</span>';
-         alertsHTML += '</div></div>';
-         //***************** Bump nodes **********************
-         // Define BOX
-         alertsHTML += '<div id="bumpNodes" style="float:left; text-align: center;width: 120px;max-width: 24%;max-height:145px;margin: 1em auto 0px auto;opacity:1;border-radius: 2px;-moz-border-radius: 2px;-webkit-border-radius: 4px;border-width:1px;border-style:solid;border-color:#92C3D3;padding:2px;  display:inline-block; border-style:solid; border-width:1px; height:152px;  margin-right:5px;">';
-         alertsHTML += '<b>Move nodes</b></br>';
-         // Move Nodes controls
-         alertsHTML += '<div id="MoveNodesControls" style="padding: 2px;">';
-            // Button A
-            alertsHTML += '<div style="text-align:center; font-size:18px;">A Node';
-               // Move node IN
-               alertsHTML += '<p><span id="btnMoveANodeIn" class="btnMoveNode" style="color: white; font-size: 0.875em; text-shadow: black 0.1em 0.1em 0.2em; padding:3px 15px 3px 15px; margin:3px;">in</span>';
-               // Move node OUT
-               alertsHTML += '<span id="btnMoveANodeOut" class="btnMoveNode" class="btnMoveNode" style="color: white; font-size: 0.875em; text-shadow: black 0.1em 0.1em 0.2em; padding:3px 10px 3px 10px; margin:3px;">out</span>';
-               alertsHTML += '</div>';
-            // Button B
-            alertsHTML += '<div style="text-align:center; font-size:18px;">B Node';
-               // Move node IN
-               alertsHTML += '<p><span id="btnMoveBNodeIn" class="btnMoveNode" style="color: white; font-size: 0.875em; text-shadow: black 0.1em 0.1em 0.2em; padding:3px 15px 3px 15px; margin:3px;">in</span>';
-               // Move node OUT
-               alertsHTML += '<span id="btnMoveBNodeOut" class="btnMoveNode" class="btnMoveNode" style="color: white; font-size: 0.875em; text-shadow: black 0.1em 0.1em 0.2em; padding:3px 10px 3px 10px; margin:3px;">out</span>';
-               alertsHTML += '</div>';
-        alertsHTML += '</div></div></div>';
+        roundaboutPopupHTML += '<div id="divWrappers" class="collapse in">';
+        //***************** Round About Angles **************************
+        roundaboutPopupHTML += '<p style="margin: 10px 0px 0px 20px;"><input type="checkbox" id="chkRARoundaboutAngles">&nbsp;Enable Roundabout Angles</p>';
+        //***************** Shift Amount **************************
+        // Define BOX
+        roundaboutPopupHTML += '<div id="contentShift" style="text-align:center;float:left; width: 120px;max-width: 24%;height: 170px;margin: 1em 5px 0px 0px;opacity:1;border-radius: 2px;-moz-border-radius: 2px;-webkit-border-radius: 4px;border-width:1px;border-style:solid;border-color:#92C3D3;padding:2px;}">';
+        roundaboutPopupHTML += '<b>Shift amount</b></br><input type="text" name="shiftAmount" id="shiftAmount" size="1" style="float: left; text-align: center;font: inherit; line-height: normal; width: 30px; height: 20px; margin: 5px 4px; box-sizing: border-box; display: block; padding-left: 0; border-bottom-color: rgba(black,.3); background: transparent; outline: none; color: black;" value="1"/> <div style="margin: 5px 4px;">Meter(s)';
+        // Shift amount controls
+        roundaboutPopupHTML += '<div id="controls" style="text-align:center; padding:06px 4px;width=100px; height=100px;margin: 5px 0px;border-style:solid; border-width: 2px;border-radius: 50%;-moz-border-radius: 50%;-webkit-border-radius: 50%;box-shadow: inset 0px 0px 50px -14px rgba(0,0,0,1);-moz-box-shadow: inset 0px 0px 50px -14px rgba(0,0,0,1);-webkit-box-shadow: inset 0px 0px 50px -14px rgba(0,0,0,1); background:#92C3D3;align:center;">';
+        //Single Shift Up Button
+        roundaboutPopupHTML += '<span id="RAShiftUpBtn" style="cursor:pointer;font-size:14px;">';
+        roundaboutPopupHTML += '<i class="fa fa-angle-double-up fa-2x" style="color: white; text-shadow: black 0.1em 0.1em 0.2em; vertical-align: top;"> </i>';
+        roundaboutPopupHTML += '<span id="UpBtnCaption" style="font-weight: bold;"></span>';
+        roundaboutPopupHTML += '</span><br>';
+        //Single Shift Left Button
+        roundaboutPopupHTML += '<span id="RAShiftLeftBtn" style="cursor:pointer;font-size:14px;margin-left:-40px;">';
+        roundaboutPopupHTML += '<i class="fa fa-angle-double-left fa-2x" style="color: white; text-shadow: black 0.1em 0.1em 0.2em; vertical-align: middle"> </i>';
+        roundaboutPopupHTML += '<span id="LeftBtnCaption" style="font-weight: bold;"></span>';
+        roundaboutPopupHTML += '</span>';
+        //Single Shift Right Button
+        roundaboutPopupHTML += '<span id="RAShiftRightBtn" style="float: right;cursor:pointer;font-size:14px;margin-right:5px;">';
+        roundaboutPopupHTML += '<i class="fa fa-angle-double-right fa-2x" style="color: white;text-shadow: black 0.1em 0.1em 0.2em;  vertical-align: middle"> </i>';
+        roundaboutPopupHTML += '<span id="RightBtnCaption" style="font-weight: bold;"></span>';
+        roundaboutPopupHTML += '</span><br>';
+        //Single Shift Down Button
+        roundaboutPopupHTML += '<span id="RAShiftDownBtn" style="cursor:pointer;font-size:14px;margin-top:0px;">';
+        roundaboutPopupHTML += '<i class="fa fa-angle-double-down fa-2x" style="color: white;text-shadow: black 0.1em 0.1em 0.2em;  vertical-align: middle"> </i>';
+        roundaboutPopupHTML += '<span id="DownBtnCaption" style="font-weight: bold;"></span>';
+        roundaboutPopupHTML += '</span>';
+        roundaboutPopupHTML += '</div></div></div>';
+        //***************** Rotation **************************
+        // Define BOX
+        roundaboutPopupHTML += '<div id="contentRotate" style="float:left; text-align: center;width: 120px;max-width: 24%;max-height:145px;margin: 1em auto;opacity:1;border-radius: 2px;-moz-border-radius: 2px;-webkit-border-radius: 4px;border-width:1px;border-style:solid;border-color:#92C3D3;padding:2px;  display:inline-block; border-style:solid; border-width:1px; height:152px;  margin-right:5px;">';
+        roundaboutPopupHTML += '<b>Rotation amount</b></br><input type="text" name="rotationAmount" id="rotationAmount" size="1" style="float: left; text-align: center;font: inherit; line-height: normal; width: 30px; height: 20px; margin: 5px 4px; box-sizing: border-box; display: block; padding-left: 0; border-bottom-color: rgba(black,.3); background: transparent; outline: none; color: black;" value="1"/> <div style="margin: 5px 4px;">Degree(s)';
+        // Rotation controls
+        roundaboutPopupHTML += '<div id="rotationControls" style="padding: 6px 4px;width=100px; margin: 20px 0px 50px 0px;align:center;">';
+        // Rotate Button on the Left
+        roundaboutPopupHTML += '<span id="RARotateLeftBtn" class="btnRotate" style="float: left;">';
+        roundaboutPopupHTML += '<i class="fa fa-undo fa-2x" style="color: white; text-shadow: black 0.1em 0.1em 0.2em; padding:2px;"> </i>';
+        roundaboutPopupHTML += '<span id="RotateLeftBtnCaption" style="font-weight: bold;"></span>';
+        roundaboutPopupHTML += '</span>';
+        // Rotate button on the Right
+        roundaboutPopupHTML += '<span id="RARotateRightBtn" class="btnRotate" style="float: right;">';
+        roundaboutPopupHTML += '<i class="fa fa-repeat fa-2x" style="color: white; text-shadow: black 0.1em 0.1em 0.2em; padding:2px;"> </i>';
+        roundaboutPopupHTML += '<span id="RotateRightBtnCaption" style="font-weight: bold;"></span>';
+        roundaboutPopupHTML += '</div></div></div>';
+        //********************* Diameter change ******************
+        // Define BOX
+        roundaboutPopupHTML += '<div id="diameterChange" style="float:left; text-align: center;width: 120px;max-width: 24%;max-height:145px;margin: 1em auto;opacity:1;border-radius: 2px;-moz-border-radius: 2px;-webkit-border-radius: 4px;border-width:1px;border-style:solid;border-color:#92C3D3;padding:2px;  display:inline-block; border-style:solid; border-width:1px; height:152px;  margin-right:5px;">';
+        roundaboutPopupHTML += '<b>Change diameter</b></br></br>';
+        // Diameter Change controls
+        roundaboutPopupHTML += '<div id="DiameterChangeControls" style="padding: 6px 4px;width=100px; margin: 5px 7px 50px 7px;align:center;">';
+        // Decrease Button
+        roundaboutPopupHTML += '<span id="diameterChangeDecreaseBtn" style="float: left; width=45px; height=45px; background-color:#92C3D3; cursor:pointer; padding: 5px; font-size:14px; border:thin outset black; border-style:solid; border-width: 1px;border-radius: 50%;-moz-border-radius: 50%;-webkit-border-radius: 50%;box-shadow: inset 0px 0px 20px -14px rgba(0,0,0,1);-moz-box-shadow: inset 0px 0px 20px -14px rgba(0,0,0,1);-webkit-box-shadow: inset 0px 0px 20px -14px rgba(0,0,0,1);">';
+        roundaboutPopupHTML += '<i class="fa fa-compress fa-2x" style="color: white; text-shadow: black 0.1em 0.1em 0.2em; padding:2px;;"> </i>';
+        roundaboutPopupHTML += '<span id="diameterChangeDecreaseCaption" style="font-weight: bold;"></span>';
+        roundaboutPopupHTML += '</span>';
+        // Increase Button
+        roundaboutPopupHTML += '<span id="diameterChangeIncreaseBtn" style="float: right; width=45px; height=45px; background-color:#92C3D3; cursor:pointer; padding: 5px; font-size:14px; border:thin outset black; border-style:solid; border-width: 1px;border-radius: 50%;-moz-border-radius: 50%;-webkit-border-radius: 50%;box-shadow: inset 0px 0px 20px -14px rgba(0,0,0,1);-moz-box-shadow: inset 0px 0px 20px -14px rgba(0,0,0,1);-webkit-box-shadow: inset 0px 0px 20px -14px rgba(0,0,0,1);">';
+        roundaboutPopupHTML += '<i class="fa fa-arrows-alt fa-2x" style="color: white; text-shadow: black 0.1em 0.1em 0.2em; padding:2px;"> </i>';
+        roundaboutPopupHTML += '<span id="diameterChangeIncreaseCaption" style="font-weight: bold;"></span>';
+        roundaboutPopupHTML += '</span>';
+        roundaboutPopupHTML += '</div></div>';
+        //***************** Bump nodes **********************
+        // Define BOX
+        roundaboutPopupHTML += '<div id="bumpNodes" style="float:left; text-align: center;width: 120px;max-width: 24%;max-height:145px;margin: 1em auto 0px auto;opacity:1;border-radius: 2px;-moz-border-radius: 2px;-webkit-border-radius: 4px;border-width:1px;border-style:solid;border-color:#92C3D3;padding:2px;  display:inline-block; border-style:solid; border-width:1px; height:152px;  margin-right:5px;">';
+        roundaboutPopupHTML += '<b>Move nodes</b></br>';
+        // Move Nodes controls
+        roundaboutPopupHTML += '<div id="MoveNodesControls" style="padding: 2px;">';
+        // Button A
+        roundaboutPopupHTML += '<div style="text-align:center; font-size:18px;">A Node';
+        // Move node IN
+        roundaboutPopupHTML += '<p><span id="btnMoveANodeIn" class="btnMoveNode" style="color: white; font-size: 0.875em; text-shadow: black 0.1em 0.1em 0.2em; padding:3px 15px 3px 15px; margin:3px; user-select:none;">in</span>';
+        // Move node OUT
+        roundaboutPopupHTML += '<span id="btnMoveANodeOut" class="btnMoveNode" class="btnMoveNode" style="color: white; font-size: 0.875em; text-shadow: black 0.1em 0.1em 0.2em; padding:3px 10px 3px 10px; margin:3px; user-select:none;">out</span>';
+        roundaboutPopupHTML += '</div>';
+        // Button B
+        roundaboutPopupHTML += '<div style="text-align:center; font-size:18px;">B Node';
+        // Move node IN
+        roundaboutPopupHTML += '<p><span id="btnMoveBNodeIn" class="btnMoveNode" style="color: white; font-size: 0.875em; text-shadow: black 0.1em 0.1em 0.2em; padding:3px 15px 3px 15px; margin:3px; user-select:none;">in</span>';
+        // Move node OUT
+        roundaboutPopupHTML += '<span id="btnMoveBNodeOut" class="btnMoveNode" class="btnMoveNode" style="color: white; font-size: 0.875em; text-shadow: black 0.1em 0.1em 0.2em; padding:3px 10px 3px 10px; margin:3px; user-select:none;">out</span>';
+        roundaboutPopupHTML += '</div>';
+        roundaboutPopupHTML += '</div></div></div>';
 
+        roundaboutPopup.innerHTML = roundaboutPopupHTML;
+        document.body.appendChild(roundaboutPopup);
 
-        RAUtilWindow.innerHTML = alertsHTML;
-        document.body.appendChild(RAUtilWindow);
+        $('#RAShiftLeftBtn').click(handleShiftLeftClick);
+        $('#RAShiftRightBtn').click(handleShiftRightClick);
+        $('#RAShiftUpBtn').click(handleShiftUpClick);
+        $('#RAShiftDownBtn').click(handleShiftDownClick);
 
-        $('#RAShiftLeftBtn').click(RAShiftLeftBtnClick);
-        $('#RAShiftRightBtn').click(RAShiftRightBtnClick);
-        $('#RAShiftUpBtn').click(RAShiftUpBtnClick);
-        $('#RAShiftDownBtn').click(RAShiftDownBtnClick);
+        $('#RARotateLeftBtn').click(handleRotateLeftClick);
+        $('#RARotateRightBtn').click(handleRotateRightClick);
 
-        $('#RARotateLeftBtn').click(RARotateLeftBtnClick);
-        $('#RARotateRightBtn').click(RARotateRightBtnClick);
+        $('#diameterChangeDecreaseBtn').click(handleDiameterDecreaseClick);
+        $('#diameterChangeIncreaseBtn').click(handleDiameterIncreaseClick);
 
-        $('#diameterChangeDecreaseBtn').click(diameterChangeDecreaseBtnClick);
-        $('#diameterChangeIncreaseBtn').click(diameterChangeIncreaseBtnClick);
+        $('#btnMoveANodeIn').click(handleNodeAInClick);
+        $('#btnMoveANodeOut').click(handleNodeAOutClick);
+        $('#btnMoveBNodeIn').click(handleNodeBInClick);
+        $('#btnMoveBNodeOut').click(handleNodeBOutClick);
 
-        $('#btnMoveANodeIn').click(function(){moveNodeIn(WazeWrap.getSelectedFeatures()[0].WW.getObjectModel().attributes.id, WazeWrap.getSelectedFeatures()[0].WW.getObjectModel().attributes.fromNodeID);});
-        $('#btnMoveANodeOut').click(function(){moveNodeOut(WazeWrap.getSelectedFeatures()[0].WW.getObjectModel().attributes.id, WazeWrap.getSelectedFeatures()[0].WW.getObjectModel().attributes.fromNodeID);});
-        $('#btnMoveBNodeIn').click(function(){moveNodeIn(WazeWrap.getSelectedFeatures()[0].WW.getObjectModel().attributes.id, WazeWrap.getSelectedFeatures()[0].WW.getObjectModel().attributes.toNodeID);});
-        $('#btnMoveBNodeOut').click(function(){moveNodeOut(WazeWrap.getSelectedFeatures()[0].WW.getObjectModel().attributes.id, WazeWrap.getSelectedFeatures()[0].WW.getObjectModel().attributes.toNodeID);});
-
-        $('#shiftAmount').keypress(function(event) {
-            if ((event.which != 46 || $(this).val().indexOf('.') != -1) && (event.which < 48 || event.which > 57))
-                event.preventDefault();
+        $('#shiftAmount').keypress(function (event) {
+            if ((event.which != 46 || $(this).val().indexOf('.') != -1) && (event.which < 48 || event.which > 57)) event.preventDefault();
         });
 
-        $('#rotationAmount').keypress(function(event) {
-            if ((event.which != 46 || $(this).val().indexOf('.') != -1) && (event.which < 48 || event.which > 57))
-                event.preventDefault();
+        $('#rotationAmount').keypress(function (event) {
+            if ((event.which != 46 || $(this).val().indexOf('.') != -1) && (event.which < 48 || event.which > 57)) event.preventDefault();
         });
 
-        $('#collapserLink').click(function(){
-            $("#divWrappers").slideToggle("fast");
-            if($('#collapser').attr('class') == "fa fa-caret-square-o-down"){
-                $("#collapser").removeClass("fa-caret-square-o-down");
-                $("#collapser").addClass("fa-caret-square-o-up");
-            }
-            else{
-                $("#collapser").removeClass("fa-caret-square-o-up");
-                $("#collapser").addClass("fa-caret-square-o-down");
+        $('#collapserLink').click(function () {
+            $('#divWrappers').slideToggle('fast');
+            if ($('#collapser').attr('class') == 'fa fa-caret-square-o-down') {
+                $('#collapser').removeClass('fa-caret-square-o-down');
+                $('#collapser').addClass('fa-caret-square-o-up');
+            } else {
+                $('#collapser').removeClass('fa-caret-square-o-up');
+                $('#collapser').addClass('fa-caret-square-o-down');
             }
             saveSettingsToStorage();
         });
 
-        W.selectionManager.events.register("selectionchanged", null, checkDisplayTool);
-        //W.model.actionManager.events.register("afterundoaction",null, undotriggered);
-        //W.model.actionManager.events.register("afterclearactions",null,actionsCleared);
-
-        var loadedSettings = $.parseJSON(localStorage.getItem("WME_RAUtil"));
-        var defaultSettings = {
-            divTop: "15%",
-            divLeft: "25%",
+        const loadedSettings = JSON.parse(localStorage.getItem('WME_RAUtil'));
+        const defaultSettings = {
+            divTop: '15%',
+            divLeft: '25%',
             Expanded: true,
             RoundaboutAngles: true
         };
-        _settings = loadedSettings ? loadedSettings : defaultSettings;
+        _settings = loadedSettings ?? defaultSettings;
 
         $('#RAUtilWindow').css('left', _settings.divLeft);
         $('#RAUtilWindow').css('top', _settings.divTop);
-        $("#chkRARoundaboutAngles").prop('checked', _settings.RoundaboutAngles);
-        $("#chkRARoundaboutAngles").prop('checked', _settings.RoundaboutAngles);
+        $('#chkRARoundaboutAngles').prop('checked', _settings.RoundaboutAngles);
+        $('#chkRARoundaboutAngles').prop('checked', _settings.RoundaboutAngles);
 
-        if(!_settings.Expanded){
-            //$("#divWrappers").removeClass("in");
-            //$("#divWrappers").addClass("collapse");
-            $("#divWrappers").hide();
-            $("#collapser").removeClass("fa-caret-square-o-up");
-            $("#collapser").addClass("fa-caret-square-o-down");
+        if (!_settings.Expanded) {
+            $('#divWrappers').hide();
+            $('#collapser').removeClass('fa-caret-square-o-up');
+            $('#collapser').addClass('fa-caret-square-o-down');
         }
 
-        $("#chkRARoundaboutAngles").click(function(){
+        sdk.Events.on({ eventName: 'wme-selection-changed', eventHandler: checkDisplayTool });
+        $('#chkRARoundaboutAngles').click(function () {
             saveSettingsToStorage();
 
-            if($("#chkRARoundaboutAngles").is(":checked")){
-                wEvents.register("zoomend", null, DrawRoundaboutAngles);
-                wEvents.register("moveend", null, DrawRoundaboutAngles);
-                DrawRoundaboutAngles();
-                drc_layer.setVisibility(true);
-            }
-            else{
-                wEvents.unregister("zoomend", null, DrawRoundaboutAngles);
-                wEvents.unregister("moveend", null, DrawRoundaboutAngles);
-                drc_layer.setVisibility(false);
+            if ($('#chkRARoundaboutAngles').is(':checked')) {
+                sdk.Events.on({ eventName: 'wme-map-zoom-changed', eventHandler: drawRoundaboutAngles });
+                sdk.Events.on({ eventName: 'wme-map-move-end', eventHandler: drawRoundaboutAngles });
+                sdk.Map.setLayerVisibility({ layerName: '__DrawRoundaboutAngles', visibility: true });
+                drawRoundaboutAngles();
+            } else {
+                sdk.Events.off({ eventName: 'wme-map-zoom-changed', eventHandler: drawRoundaboutAngles });
+                sdk.Events.off({ eventName: 'wme-map-move-end', eventHandler: drawRoundaboutAngles });
+                sdk.Map.setLayerVisibility({ layerName: '__DrawRoundaboutAngles', visibility: false });
             }
         });
 
-        if(_settings.RoundaboutAngles){
-            wEvents.register("zoomend", null, DrawRoundaboutAngles);
-            wEvents.register("moveend", null, DrawRoundaboutAngles);
-            DrawRoundaboutAngles();
+        if (_settings.RoundaboutAngles) {
+            sdk.Events.on({ eventName: 'wme-map-zoom-changed', eventHandler: drawRoundaboutAngles });
+            sdk.Events.on({ eventName: 'wme-map-move-end', eventHandler: drawRoundaboutAngles });
+            drawRoundaboutAngles();
         }
 
-        WazeWrap.Interface.ShowScriptUpdate("WME RA Util", GM_info.script.version, updateMessage, "https://greasyfork.org/en/scripts/23616-wme-ra-util", "https://www.waze.com/forum/viewtopic.php?f=819&t=211079");
+        WazeWrap.Interface.ShowScriptUpdate('WME RA Util', GM_info.script.version, updateMessage, 'https://greasyfork.org/en/scripts/23616-wme-ra-util', 'https://www.waze.com/forum/viewtopic.php?f=819&t=211079');
     }
 
     function saveSettingsToStorage() {
         if (localStorage) {
-            var settings = {
-                divTop: "15%",
-                divLeft: "25%",
-                Expanded: true,
-                RoundaboutAngles: true
-            };
-
-            settings.divLeft = $('#RAUtilWindow').css('left');
-            settings.divTop = $('#RAUtilWindow').css('top');
-            settings.Expanded = $("#collapser").attr('class').indexOf("fa-caret-square-o-up") > -1;
-            settings.RoundaboutAngles = $("#chkRARoundaboutAngles").is(":checked");
-            localStorage.setItem("WME_RAUtil", JSON.stringify(settings));
+            _settings.divLeft = $('#RAUtilWindow').css('left');
+            _settings.divTop = $('#RAUtilWindow').css('top');
+            _settings.Expanded = $('#collapser').attr('class').indexOf('fa-caret-square-o-up') > -1;
+            _settings.RoundaboutAngles = $('#chkRARoundaboutAngles').is(':checked');
+            localStorage.setItem('WME_RAUtil', JSON.stringify(_settings));
         }
     }
 
-    function checkDisplayTool(){
-        if(WazeWrap.hasSelectedFeatures() && WazeWrap.getSelectedFeatures()[0].WW.getType() === 'segment'){
-            if(!AllSelectedSegmentsRA() || WazeWrap.getSelectedFeatures().length === 0)
-                $('#RAUtilWindow').css({'visibility': 'hidden'});
-            else{
-                $('#RAUtilWindow').css({'visibility': 'visible'});
-                if(typeof jQuery.ui !== 'undefined')
-                    $('#RAUtilWindow' ).draggable({ //Gotta nuke the height setting the dragging inserts otherwise the panel cannot collapse
-                        stop: function(event, ui) {
-                            $('#RAUtilWindow').css("height", "");
+    function checkDisplayTool() {
+        if (sdk.Editing.getSelection()?.objectType === 'segment') {
+            if (!allRoundaboutSegmentsSelected()) {
+                $('#RAUtilWindow').css({ visibility: 'hidden' });
+            } else {
+                $('#RAUtilWindow').css({ visibility: 'visible' });
+                if (typeof jQuery.ui !== 'undefined') {
+                    $('#RAUtilWindow').draggable({
+                        //Gotta nuke the height setting the dragging inserts otherwise the panel cannot collapse
+                        stop: () => {
+                            $('#RAUtilWindow').css('height', '');
                             saveSettingsToStorage();
                         }
                     });
-                //checkSaveChanges();
-                checkAllEditable(WazeWrap.Model.getAllRoundaboutSegmentsFromObj(WazeWrap.getSelectedFeatures()[0]));
+                }
+                const segment = sdk.DataModel.Segments.getById({ segmentId: sdk.Editing.getSelection().ids[0] });
+                const junction = sdk.DataModel.Junctions.getById({ junctionId: segment.junctionId });
+                const connectedSegments = getSegmentsFromIds(junction.segmentIds);
+                checkAndDisplaySegmentEditability(connectedSegments);
             }
-        }
-        else{
-            $('#RAUtilWindow').css({'visibility': 'hidden'});
-            if(typeof jQuery.ui !== 'undefined')
-                $('#RAUtilWindow' ).draggable({
-                    stop: function(event, ui) {
-                        $('#RAUtilWindow').css("height", "");
+        } else {
+            $('#RAUtilWindow').css({ visibility: 'hidden' });
+            if (typeof jQuery.ui !== 'undefined') {
+                $('#RAUtilWindow').draggable({
+                    stop: () => {
+                        $('#RAUtilWindow').css('height', '');
                         saveSettingsToStorage();
                     }
                 });
+            }
         }
     }
 
-    function checkAllEditable(RASegs){
-        var $RAEditable = $('#RAEditable');
-        var allEditable = true;
-        var segObj, fromNode, toNode;
+    function getSegmentsFromIds(segmentIds) {
+        return segmentIds.map((segmentId) => sdk.DataModel.Segments.getById({ segmentId }));
+    }
 
-        for(let i=0; i<RASegs.length;i++){
-            segObj = W.model.segments.getObjectById(RASegs[i]);
-            fromNode = segObj.getFromNode();
-            toNode = segObj.getToNode();
+    function checkAndDisplaySegmentEditability(segments) {
+        const errorElement = $('#RAEditable');
+        let allEditable = true;
 
-            if(segObj !== "undefined"){
-                if(fromNode && fromNode !== "undefined" && !fromNode.areConnectionsEditable())
-                    allEditable = false;
-                else if(toNode && toNode !== "undefined" && !toNode.areConnectionsEditable())
-                    allEditable = false;
-                var toConnected, fromConnected;
+        for (let segment of segments) {
+            const fromNode = sdk.DataModel.Nodes.getById({ nodeId: segment.fromNodeId });
+            const toNode = sdk.DataModel.Nodes.getById({ nodeId: segment.toNodeId });
+            const userRank = sdk.State.getUserInfo().rank;
 
-                if(toNode){
-                    toConnected = toNode.attributes.segIDs;
-                    for(let j=0;j<toConnected.length;j++){
-                        if(W.model.segments.getObjectById(toConnected[j]) !== "undefined")
-                            if(W.model.segments.getObjectById(toConnected[j]).hasClosures())
-                                allEditable = false;
+            if (segment) {
+                if (toNode) {
+                    let toConnectedSegments = getSegmentsFromIds(toNode.connectedSegmentIds);
+                    for (let toConnectedSegment of toConnectedSegments) {
+                        if ((toConnectedSegment && toConnectedSegment.hasClosures) || toConnectedSegment.lockRank > userRank) {
+                            allEditable = false;
+                        }
                     }
                 }
 
-                if(fromNode){
-                    fromConnected = fromNode.attributes.segIDs;
-                    for(let j=0;j<fromConnected.length;j++){
-                        if(W.model.segments.getObjectById(fromConnected[j]) !== "undefined")
-                            if(W.model.segments.getObjectById(fromConnected[j]).hasClosures())
-                                allEditable = false;
+                if (fromNode) {
+                    let fromConnectedSegments = getSegmentsFromIds(fromNode.connectedSegmentIds);
+                    for (let fromConnectedSegment of fromConnectedSegments) {
+                        if ((fromConnectedSegment && fromConnectedSegment.hasClosures) || fromConnectedSegment.lockRank > userRank) {
+                            allEditable = false;
+                        }
                     }
                 }
             }
         }
-        if(allEditable)
-            $RAEditable.remove();
-        else{
-            if($RAEditable.length === 0){
-                $RAEditable = $('<div>', {id:'RAEditable', style:'color:red'});
-                $RAEditable.text('One or more segments are locked above your rank or have a closure.');
-                $('#RAUtilWindow').append($RAEditable);
+
+        if (allEditable) {
+            errorElement.remove();
+        } else {
+            if (errorElement.length === 0) {
+                errorElement = $('<div>', { id: 'RAEditable', style: 'color:red' });
+                errorElement.text('One or more segments are locked above your rank or have a closure.');
+                $('#RAUtilWindow').append(errorElement);
             }
         }
         return allEditable;
     }
 
-    function AllSelectedSegmentsRA(){
-        for (let i = 0; i < WazeWrap.getSelectedFeatures().length; i++){
-            if(WazeWrap.getSelectedFeatures()[i].WW.getObjectModel().attributes.id < 0 || !WazeWrap.Model.isRoundaboutSegmentID(WazeWrap.getSelectedFeatures()[i].WW.getObjectModel().attributes.id))
+    function allRoundaboutSegmentsSelected() {
+        for (const segmentId of sdk.Editing.getSelection().ids) {
+            if (segmentId < 0 || !sdk.DataModel.Segments.getById({ segmentId: segmentId }).junctionId) {
                 return false;
+            }
         }
         return true;
     }
 
-    function ShiftSegmentNodesLat(segObj, latOffset){
-        var RASegs = WazeWrap.Model.getAllRoundaboutSegmentsFromObj(segObj);
-        if(checkAllEditable(RASegs)){
-            var newGeometry, originalLength;
-            var multiaction = new MultiAction();
-            // multiaction.setModel(W.model);
+    function handleShiftUpClick(e) {
+        e.stopPropagation();
 
-            for(let i=0; i<RASegs.length; i++){
-                segObj = W.model.segments.getObjectById(RASegs[i]);
-                newGeometry = structuredClone(segObj.attributes.geoJSONGeometry);
-                originalLength = segObj.attributes.geoJSONGeometry.coordinates.length;
-                for(j=1; j < originalLength-1; j++){
-                    newGeometry.coordinates[j][1] += latOffset;
+        const segment = sdk.DataModel.Segments.getById({ segmentId: sdk.Editing.getSelection().ids[0] });
+        shiftRoundaboutLat(segment, $('#shiftAmount').val());
+    }
+
+    function handleShiftDownClick(e) {
+        e.stopPropagation();
+        const segment = sdk.DataModel.Segments.getById({ segmentId: sdk.Editing.getSelection().ids[0] });
+        shiftRoundaboutLat(segment, -$('#shiftAmount').val());
+    }
+
+    function shiftRoundaboutLat(segment, offset) {
+        const segmentIds = sdk.DataModel.Junctions.getById({ junctionId: segment.junctionId }).segmentIds;
+        const segments = getSegmentsFromIds(segmentIds);
+
+        if (checkAndDisplaySegmentEditability(segments)) {
+            for (const segmentId of segmentIds) {
+                // Fetch new segment data, as we can be changing other segments by moving nodes
+                const segment = sdk.DataModel.Segments.getById({ segmentId });
+                // Move all segment points
+                let newGeometry = structuredClone(segment.geometry);
+                const originalLength = segment.geometry.coordinates.length;
+                for (let i = 1; i < originalLength - 1; i++) {
+                    const bearing = offset > 0 ? DIRECTION.NORTH : DIRECTION.SOUTH;
+                    const distance = Math.abs(offset);
+                    const currentPoint = segment.geometry.coordinates[i];
+                    const newPoint = turf.destination(currentPoint, distance, bearing, { units: 'meters' });
+                    newGeometry.coordinates[i] = newPoint.geometry.coordinates;
                 }
-                //W.model.actionManager.add(new UpdateSegmentGeometry(segObj, segObj.geometry, newGeometry));
-                multiaction.doSubAction(W.model, new UpdateSegmentGeometry(segObj, segObj.attributes.geoJSONGeometry, newGeometry));
+                sdk.DataModel.Segments.updateSegment({ segmentId: segment.id, geometry: newGeometry });
 
-                var node = W.model.nodes.objects[segObj.attributes.toNodeID];
-                if(segObj.attributes.revDirection)
-                    node = W.model.nodes.objects[segObj.attributes.fromNodeID];
-                var newNodeGeometry = structuredClone(node.attributes.geoJSONGeometry);
-                newNodeGeometry.coordinates[1] += latOffset;
+                //Move node
+                const nodeId = segment.isAtoB ? segment.toNodeId : segment.fromNodeId;
+                const node = sdk.DataModel.Nodes.getById({ nodeId });
+                let newNodeGeometry = structuredClone(node.geometry);
 
-                var connectedSegObjs = {};
-                var emptyObj = {};
-                for(var j=0;j<node.attributes.segIDs.length;j++){
-                    var segid = node.attributes.segIDs[j];
-                    connectedSegObjs[segid] = structuredClone(W.model.segments.getObjectById(segid).attributes.geoJSONGeometry);
-                }
-                //W.model.actionManager.add(new MoveNode(segObj, segObj.geometry, newNodeGeometry, connectedSegObjs, i));
-                multiaction.doSubAction(W.model, new MoveNode(node, node.attributes.geoJSONGeometry, newNodeGeometry, connectedSegObjs, emptyObj));
-                //W.model.actionManager.add(new MoveNode(node, node.geometry, newNodeGeometry));
-                //totalActions +=2;
+                const nodeBearing = offset > 0 ? DIRECTION.NORTH : DIRECTION.SOUTH;
+                const nodeDistance = Math.abs(offset);
+                const currentNodePoint = node.geometry.coordinates;
+                const newNodePoint = turf.destination(currentNodePoint, nodeDistance, nodeBearing, { units: 'meters' });
+                newNodeGeometry.coordinates = newNodePoint.geometry.coordinates;
+
+                sdk.DataModel.Nodes.moveNode({ id: node.id, geometry: newNodeGeometry });
             }
-            W.model.actionManager.add(multiaction);
         }
     }
 
-    function ShiftSegmentsNodesLong(segObj, longOffset){
-        var RASegs = WazeWrap.Model.getAllRoundaboutSegmentsFromObj(segObj);
-        if(checkAllEditable(RASegs)){
-            var newGeometry, originalLength;
-            var multiaction = new MultiAction();
-            // multiaction.setModel(W.model);
+    function handleShiftLeftClick(e) {
+        e.stopPropagation();
+        const segment = sdk.DataModel.Segments.getById({ segmentId: sdk.Editing.getSelection().ids[0] });
+        shiftRoundaboutLon(segment, -$('#shiftAmount').val());
+    }
 
-            //Loop through all RA segments & adjust
-            for(let i=0; i<RASegs.length; i++){
-                segObj = W.model.segments.getObjectById(RASegs[i]);
-                newGeometry = structuredClone(segObj.attributes.geoJSONGeometry);
-                originalLength = segObj.attributes.geoJSONGeometry.coordinates.length;
-                for(let j=1; j < originalLength-1; j++){
-                    newGeometry.coordinates[j][0] += longOffset;
+    function handleShiftRightClick(e) {
+        e.stopPropagation();
+        const segment = sdk.DataModel.Segments.getById({ segmentId: sdk.Editing.getSelection().ids[0] });
+        shiftRoundaboutLon(segment, $('#shiftAmount').val());
+    }
+
+    function shiftRoundaboutLon(segment, longOffset) {
+        const segmentIds = sdk.DataModel.Junctions.getById({ junctionId: segment.junctionId }).segmentIds;
+        const segments = getSegmentsFromIds(segmentIds);
+
+        if (checkAndDisplaySegmentEditability(segments)) {
+            for (const segmentId of segmentIds) {
+                // Fetch new segment data, as we can be changing other segments by moving nodes
+                const segment = sdk.DataModel.Segments.getById({ segmentId });
+                // Move segment
+                let newGeometry = structuredClone(segment.geometry);
+                const originalLength = segment.geometry.coordinates.length;
+                for (let i = 1; i < originalLength - 1; i++) {
+                    const bearing = longOffset > 0 ? DIRECTION.EAST : DIRECTION.WEST;
+                    const distance = Math.abs(longOffset);
+                    const currentPoint = segment.geometry.coordinates[i];
+                    const newPoint = turf.destination(currentPoint, distance, bearing, { units: 'meters' });
+                    newGeometry.coordinates[i] = newPoint.geometry.coordinates;
                 }
-                //W.model.actionManager.add(new UpdateSegmentGeometry(segObj, segObj.geometry, newGeometry));
-                multiaction.doSubAction(W.model, new UpdateSegmentGeometry(segObj, segObj.attributes.geoJSONGeometry, newGeometry));
+                sdk.DataModel.Segments.updateSegment({ segmentId: segment.id, geometry: newGeometry });
 
-                var node = W.model.nodes.objects[segObj.attributes.toNodeID];
-                if(segObj.attributes.revDirection)
-                    node = W.model.nodes.objects[segObj.attributes.fromNodeID];
+                // Move node
+                const nodeId = segment.isAtoB ? segment.toNodeId : segment.fromNodeId;
+                const node = sdk.DataModel.Nodes.getById({ nodeId });
+                let newNodeGeometry = structuredClone(node.geometry);
 
-                var newNodeGeometry = structuredClone(node.attributes.geoJSONGeometry);
-                newNodeGeometry.coordinates[0] += longOffset;
+                const nodeBearing = longOffset > 0 ? DIRECTION.EAST : DIRECTION.WEST;
+                const nodeDistance = Math.abs(longOffset);
+                const currentNodePoint = node.geometry.coordinates;
+                const newNodePoint = turf.destination(currentNodePoint, nodeDistance, nodeBearing, { units: 'meters' });
+                newNodeGeometry.coordinates = newNodePoint.geometry.coordinates;
 
-                var connectedSegObjs = {};
-                var emptyObj = {};
-                for(let j=0;j<node.attributes.segIDs.length;j++){
-                    var segid = node.attributes.segIDs[j];
-                    connectedSegObjs[segid] = structuredClone(W.model.segments.getObjectById(segid).attributes.geoJSONGeometry);
-                }
-                //W.model.actionManager.add(new MoveNode(node, node.geometry, newNodeGeometry));
-                multiaction.doSubAction(W.model, new MoveNode(node, node.attributes.geoJSONGeometry, newNodeGeometry, connectedSegObjs, emptyObj));
-                //totalActions +=2;
+                sdk.DataModel.Nodes.moveNode({ id: node.id, geometry: newNodeGeometry });
             }
-            W.model.actionManager.add(multiaction);
         }
     }
 
-    function rotatePoints(origin, points, angle){
-        var lineFeature = new OpenLayers.Feature.Vector(new OpenLayers.Geometry.LineString(points),null,null);
-        lineFeature.geometry.rotate(angle, new OpenLayers.Geometry.Point(origin[0], origin[1]));
-        return [].concat(lineFeature.geometry.components);
+    function handleRotateLeftClick(e) {
+        e.stopPropagation();
+        const segment = sdk.DataModel.Segments.getById({ segmentId: sdk.Editing.getSelection().ids[0] });
+        rotateRoundabout(segment, $('#rotationAmount').val());
     }
 
-    function RotateRA(segObj, angle){
-        var RASegs = WazeWrap.Model.getAllRoundaboutSegmentsFromObj(segObj);
-        var raCenter = W.model.junctions.objects[segObj.WW.getAttributes().junctionID].attributes.geoJSONGeometry.coordinates;
+    function handleRotateRightClick(e) {
+        e.stopPropagation();
+        const segment = sdk.DataModel.Segments.getById({ segmentId: sdk.Editing.getSelection().ids[0] });
+        rotateRoundabout(segment, -$('#rotationAmount').val());
+    }
 
-        if(checkAllEditable(RASegs)){
-            var gps, newGeometry, originalLength;
-            var multiaction = new MultiAction();
-            // multiaction.setModel(W.model);
+    function rotateRoundabout(segment, angle) {
+        const junction = sdk.DataModel.Junctions.getById({ junctionId: segment.junctionId });
+        const segmentIds = junction.segmentIds;
+        const centerCoordinates = junction.geometry.coordinates;
 
-            //Loop through all RA segments & adjust
-            for(let i=0; i<RASegs.length; i++){
-                segObj = W.model.segments.getObjectById(RASegs[i]);
-                newGeometry = structuredClone(segObj.attributes.geoJSONGeometry);
-                originalLength = segObj.attributes.geoJSONGeometry.coordinates.length;
-
-                var center = raCenter; //WazeWrap.Geometry.ConvertTo900913(raCenter.x, raCenter.y);
-                var segPoints = [];
-                //Have to copy the points manually (can't use .clone()) otherwise the geometry rotation modifies the geometry of the segment itself and that hoses WME.
-                for(let j=0; j<originalLength;j++)
-                    segPoints.push(new OpenLayers.Geometry.Point(segObj.attributes.geoJSONGeometry.coordinates[j][0], segObj.attributes.geoJSONGeometry.coordinates[j][1]));
-
-                var newPoints = rotatePoints(center, segPoints, angle);
-
-                for(let j=1; j<originalLength-1;j++){
-                    newGeometry.coordinates[j] = [newPoints[j].x, newPoints[j].y];
+        let segments = getSegmentsFromIds(segmentIds);
+        if (checkAndDisplaySegmentEditability(segments)) {
+            for (const segmentId of segmentIds) {
+                // Fetch new segment data, as we can be changing other segments by moving nodes
+                const segment = sdk.DataModel.Segments.getById({ segmentId });
+                // Rotate segment
+                let newGeometry = structuredClone(segment.geometry);
+                const originalLength = segment.geometry.coordinates.length;
+                for (let i = 1; i < originalLength - 1; i++) {
+                    const currentPoint = segment.geometry.coordinates[i];
+                    const rotatedPoint = rotatePointAroundCenter(currentPoint, centerCoordinates, angle);
+                    newGeometry.coordinates[i] = rotatedPoint.geometry.coordinates;
                 }
+                sdk.DataModel.Segments.updateSegment({ segmentId: segment.id, geometry: newGeometry });
 
-                //W.model.actionManager.add(new UpdateSegmentGeometry(segObj, segObj.geometry, newGeometry));
-                multiaction.doSubAction(W.model, new UpdateSegmentGeometry(segObj, segObj.attributes.geoJSONGeometry, newGeometry));
-
-                //**************Rotate Nodes******************
-                var node = W.model.nodes.objects[segObj.attributes.toNodeID];
-                if(segObj.attributes.revDirection)
-                    node = W.model.nodes.objects[segObj.attributes.fromNodeID];
-
-                var nodePoints = [];
-                var newNodeGeometry = structuredClone(node.attributes.geoJSONGeometry);
-
-                nodePoints.push(new OpenLayers.Geometry.Point(node.attributes.geoJSONGeometry.coordinates[0], node.attributes.geoJSONGeometry.coordinates[1]));
-                nodePoints.push(new OpenLayers.Geometry.Point(node.attributes.geoJSONGeometry.coordinates[0], node.attributes.geoJSONGeometry.coordinates[1])); //add it twice because lines need 2 points
-
-                gps = rotatePoints(center, nodePoints, angle);
-
-                newNodeGeometry.coordinates = [gps[0].x, gps[0].y];
-
-                var connectedSegObjs = {};
-                var emptyObj = {};
-                for(let j=0;j<node.attributes.segIDs.length;j++){
-                    var segid = node.attributes.segIDs[j];
-                    connectedSegObjs[segid] = structuredClone(W.model.segments.getObjectById(segid).attributes.geoJSONGeometry);
-                }
-                multiaction.doSubAction(W.model, new MoveNode(node, node.attributes.geoJSONGeometry, newNodeGeometry, connectedSegObjs, emptyObj));
-                //totalActions +=2;
+                // Rotate nodes
+                const nodeId = segment.isAtoB ? segment.toNodeId : segment.fromNodeId;
+                const node = sdk.DataModel.Nodes.getById({ nodeId });
+                let newNodeGeometry = structuredClone(node.geometry);
+                const currentNodePoint = node.geometry.coordinates;
+                const rotatedNodePoint = rotatePointAroundCenter(currentNodePoint, centerCoordinates, angle);
+                newNodeGeometry.coordinates = rotatedNodePoint.geometry.coordinates;
+                sdk.DataModel.Nodes.moveNode({ id: node.id, geometry: newNodeGeometry });
             }
-            W.model.actionManager.add(multiaction);
+
+            if (_settings.RoundaboutAngles) {
+                drawRoundaboutAngles();
+            }
         }
     }
 
-    function RARotateLeftBtnClick(e){
-        e.stopPropagation();
-        var segObj = WazeWrap.getSelectedFeatures()[0];
-        RotateRA(segObj, $('#rotationAmount').val());
+    function rotatePointAroundCenter(point, center, angleDegrees) {
+        const distance = turf.distance(center, point, { units: 'meters' });
+        const currentBearing = turf.bearing(center, point);
+        const newBearing = currentBearing - angleDegrees;
+
+        return turf.destination(center, distance, newBearing, { units: 'meters' });
     }
 
-    function RARotateRightBtnClick(e){
+    function handleDiameterDecreaseClick(e) {
         e.stopPropagation();
-
-        var segObj = WazeWrap.getSelectedFeatures()[0];
-        RotateRA(segObj, -$('#rotationAmount').val());
+        const segment = sdk.DataModel.Segments.getById({ segmentId: sdk.Editing.getSelection().ids[0] });
+        changeRoundaboutDiameter(segment, -1);
     }
 
-    function ChangeDiameter(segObj, amount){
-        var RASegs = WazeWrap.Model.getAllRoundaboutSegmentsFromObj(segObj);
-        var raCenter = W.model.junctions.objects[segObj.WW.getAttributes().junctionID].attributes.geoJSONGeometry.coordinates;
-        let { lon: centerX, lat: centerY } = WazeWrap.Geometry.ConvertTo900913(raCenter);
+    function handleDiameterIncreaseClick(e) {
+        e.stopPropagation();
+        const segment = sdk.DataModel.Segments.getById({ segmentId: sdk.Editing.getSelection().ids[0] });
+        changeRoundaboutDiameter(segment, 1);
+    }
 
-        if(checkAllEditable(RASegs)){
-            var newGeometry, originalLength;
+    function changeRoundaboutDiameter(segment, amount) {
+        const junction = sdk.DataModel.Junctions.getById({ junctionId: segment.junctionId });
+        const segmentIds = junction.segmentIds;
+        const centerCoordinates = junction.geometry.coordinates;
 
-            //Loop through all RA segments & adjust
-            for(let i=0; i<RASegs.length; i++){
-                segObj = W.model.segments.getObjectById(RASegs[i]);
-                newGeometry = structuredClone(segObj.attributes.geoJSONGeometry);
-                originalLength = segObj.attributes.geoJSONGeometry.coordinates.length;
-
-                for(let j=1; j < originalLength-1; j++){
-                    let pt = segObj.attributes.geoJSONGeometry.coordinates[j];
-                    let { lon: pointX, lat: pointY } = WazeWrap.Geometry.ConvertTo900913(pt);
-                    let h = Math.sqrt(Math.abs(Math.pow(pointX - centerX, 2) + Math.pow(pointY - centerY, 2)));
-                    let ratio = (h + amount)/h;
-                    let x = centerX + (pointX - centerX) * ratio;
-                    let y = centerY + (pointY - centerY) * ratio;
-
-                    let { lon: newX, lat: newY } = WazeWrap.Geometry.ConvertTo4326([x, y]);
-                    newGeometry.coordinates[j] = [newX, newY];
+        let segments = getSegmentsFromIds(segmentIds);
+        if (checkAndDisplaySegmentEditability(segments)) {
+            for (const segmentId of segmentIds) {
+                // Fetch new segment data, as we can be changing other segments by moving nodes
+                const segment = sdk.DataModel.Segments.getById({ segmentId });
+                // Modify segment
+                let newGeometry = structuredClone(segment.geometry);
+                const originalLength = segment.geometry.coordinates.length;
+                for (let i = 1; i < originalLength - 1; i++) {
+                    const currentPoint = segment.geometry.coordinates[i];
+                    const currentDistance = turf.distance(centerCoordinates, currentPoint, { units: 'meters' });
+                    const newDistance = currentDistance + amount;
+                    let bearing = turf.bearing(centerCoordinates, currentPoint);
+                    let newPoint = turf.destination(centerCoordinates, newDistance, bearing, { units: 'meters' });
+                    newGeometry.coordinates[i] = newPoint.geometry.coordinates;
                 }
-                W.model.actionManager.add(new UpdateSegmentGeometry(segObj, segObj.attributes.geoJSONGeometry, newGeometry));
+                sdk.DataModel.Segments.updateSegment({ segmentId: segment.id, geometry: newGeometry });
 
-                var node = W.model.nodes.objects[segObj.attributes.toNodeID];
-                if(segObj.attributes.revDirection)
-                    node = W.model.nodes.objects[segObj.attributes.fromNodeID];
-
-                var newNodeGeometry = structuredClone(node.attributes.geoJSONGeometry);
-                let { lon: pointX, lat: pointY } = WazeWrap.Geometry.ConvertTo900913(newNodeGeometry.coordinates);
-                let h = Math.sqrt(Math.abs(Math.pow(pointX - centerX, 2) + Math.pow(pointY - centerY, 2)));
-                let ratio = (h + amount)/h;
-                let x = centerX + (pointX - centerX) * ratio;
-                let y = centerY + (pointY - centerY) * ratio;
-
-                let { lon: newX, lat: newY } = WazeWrap.Geometry.ConvertTo4326([x, y]);
-                newNodeGeometry.coordinates = [newX, newY];
-
-                var connectedSegObjs = {};
-                var emptyObj = {};
-                for(let j=0;j<node.attributes.segIDs.length;j++){
-                    var segid = node.attributes.segIDs[j];
-                    connectedSegObjs[segid] = structuredClone(W.model.segments.getObjectById(segid).attributes.geoJSONGeometry);
-                }
-                W.model.actionManager.add(new MoveNode(node, node.attributes.geoJSONGeometry, newNodeGeometry, connectedSegObjs, emptyObj));
+                // Move node
+                const nodeId = segment.isAtoB ? segment.toNodeId : segment.fromNodeId;
+                const node = sdk.DataModel.Nodes.getById({ nodeId });
+                let newNodeGeometry = structuredClone(node.geometry);
+                const currentNodeDistance = turf.distance(centerCoordinates, newNodeGeometry.coordinates, { units: 'meters' });
+                const newNodeDistance = currentNodeDistance + amount;
+                const nodeBearing = turf.bearing(centerCoordinates, newNodeGeometry.coordinates);
+                const newNodePoint = turf.destination(centerCoordinates, newNodeDistance, nodeBearing, { units: 'meters' });
+                newNodeGeometry.coordinates = newNodePoint.geometry.coordinates;
+                sdk.DataModel.Nodes.moveNode({ id: node.id, geometry: newNodeGeometry });
             }
-            if(_settings.RoundaboutAngles)
-                DrawRoundaboutAngles();
+
+            if (_settings.RoundaboutAngles) {
+                drawRoundaboutAngles();
+            }
         }
     }
 
-    function diameterChangeDecreaseBtnClick(e){
+    function handleNodeAInClick(e) {
         e.stopPropagation();
-        var segObj = WazeWrap.getSelectedFeatures()[0];
-        ChangeDiameter(segObj, -1);
+        const segment = sdk.DataModel.Segments.getById({ segmentId: sdk.Editing.getSelection().ids[0] });
+        moveNodeIn(segment, segment.fromNodeId);
     }
 
-    function diameterChangeIncreaseBtnClick(e){
+    function handleNodeBInClick(e) {
         e.stopPropagation();
-        var segObj = WazeWrap.getSelectedFeatures()[0];
-        ChangeDiameter(segObj, 1);
+        const segment = sdk.DataModel.Segments.getById({ segmentId: sdk.Editing.getSelection().ids[0] });
+        moveNodeIn(segment, segment.toNodeId);
     }
 
-    function moveNodeIn(sourceSegID, nodeID){
+    function moveNodeIn(segment, nodeId) {
         let isANode = true;
-        let curSeg = W.model.segments.getObjectById(sourceSegID);
-        if (curSeg.attributes.geoJSONGeometry.coordinates.length > 2) {
-            if(nodeID === curSeg.attributes.toNodeID)
+        // Segment needs at least 3 coords (A node, one geonode and B node)
+        if (segment.geometry.coordinates.length > 2) {
+            if (nodeId === segment.toNodeId) {
                 isANode = false;
-            //Add geo point on the other segment
-            let node = W.model.nodes.getObjectById(nodeID);
-            let currNodePOS = structuredClone(node.attributes.geoJSONGeometry.coordinates);
-            let otherSeg; //other RA segment that we are adding a geo point to
-            let nodeSegs = [...W.model.nodes.getObjectById(nodeID).attributes.segIDs];
-            nodeSegs = _.without(nodeSegs, sourceSegID); //remove the source segment from the node Segs - we need to find the segment that is a part of the RA that is prior to our source seg
-            for(let i=0; i<nodeSegs.length; i++){
-                let s = W.model.segments.getObjectById(nodeSegs[i]);
-                if(s.attributes.junctionID){
-                    otherSeg = s;
+            }
+
+            // Find the other segment on the roundabout connected to the node
+            const node = sdk.DataModel.Nodes.getById({ nodeId: nodeId });
+            let nodeSegmentIds = node.connectedSegmentIds.filter((segmentId) => segmentId !== segment.id);
+            const nodeSegments = getSegmentsFromIds(nodeSegmentIds);
+
+            let otherSegment;
+            for (const nodeSegment of nodeSegments) {
+                if (nodeSegment.junctionId) {
+                    otherSegment = nodeSegment;
                     break;
                 }
             }
 
-            var multiaction = new MultiAction();
-            // multiaction.setModel(W.model);
-            //note and remove first geo point, move junction node to this point
-            var newNodeGeometry = { type: 'Point', coordinates: structuredClone(curSeg.attributes.geoJSONGeometry.coordinates[isANode ? 1 : curSeg.attributes.geoJSONGeometry.coordinates.length - 2]) };
+            // Copy the coordinate of the geonode to be replaced with a node
+            const newNodeGeometry = {
+                type: 'Point',
+                coordinates: structuredClone(segment.geometry.coordinates[isANode ? 1 : segment.geometry.coordinates.length - 2])
+            };
 
-            let newSegGeo = structuredClone(curSeg.attributes.geoJSONGeometry);
-            newSegGeo.coordinates.splice(isANode ? 1 : newSegGeo.coordinates.length - 2, 1);
-            multiaction.doSubAction(W.model, new UpdateSegmentGeometry(curSeg, curSeg.attributes.geoJSONGeometry, newSegGeo));
+            // Update the segment (remove a geonode)
+            let newSegmentGeometry = structuredClone(segment.geometry);
+            newSegmentGeometry.coordinates.splice(isANode ? 1 : newSegmentGeometry.coordinates.length - 2, 1);
+            sdk.DataModel.Segments.updateSegment({ segmentId: segment.id, geometry: newSegmentGeometry });
 
-            //move the node
-            var connectedSegObjs = {};
-            var emptyObj = {};
-            for(var j=0;j<node.attributes.segIDs.length;j++){
-                var segid = node.attributes.segIDs[j];
-                connectedSegObjs[segid] = structuredClone(W.model.segments.getObjectById(segid).attributes.geoJSONGeometry);
+            // Move node
+            sdk.DataModel.Nodes.moveNode({ id: node.id, geometry: newNodeGeometry });
+
+            // The other segment will be the opposite of A or B
+            if ((otherSegment.isBtoA && !segment.isBtoA) || (!otherSegment.isBtoA && segment.isBtoA)) {
+                isANode = !isANode;
             }
-            multiaction.doSubAction(W.model, new MoveNode(node, node.attributes.geoJSONGeometry, newNodeGeometry, connectedSegObjs, emptyObj));
 
-            if((otherSeg.attributes.revDirection && !curSeg.attributes.revDirection) || (!otherSeg.attributes.revDirection && curSeg.attributes.revDirection))
-                    isANode = !isANode;
+            // Update the other segment (add a geonode)
+            let newOtherSegmentGeometry = structuredClone(otherSegment.geometry);
+            newOtherSegmentGeometry.coordinates.splice(isANode ? newOtherSegmentGeometry.coordinates.length : 0, 0, newNodeGeometry.coordinates);
+            sdk.DataModel.Segments.updateSegment({ segmentId: otherSegment.id, geometry: newOtherSegmentGeometry });
 
-            let newGeo = structuredClone(otherSeg.attributes.geoJSONGeometry);
-            newGeo.coordinates.splice(isANode ? -1 : 1, 0, [currNodePOS[0], currNodePOS[1]]);
-            
-            multiaction.doSubAction(W.model, new UpdateSegmentGeometry(otherSeg, otherSeg.attributes.geoJSONGeometry, newGeo));
-            W.model.actionManager.add(multiaction);
-
-            if(_settings.RoundaboutAngles)
-                DrawRoundaboutAngles();
+            if (_settings.RoundaboutAngles) {
+                drawRoundaboutAngles();
+            }
         }
     }
 
-    function moveNodeOut(sourceSegID, nodeID){
+    function handleNodeAOutClick(e) {
+        e.stopPropagation();
+        const segment = sdk.DataModel.Segments.getById({ segmentId: sdk.Editing.getSelection().ids[0] });
+        moveNodeOut(segment, segment.fromNodeId);
+    }
+
+    function handleNodeBOutClick(e) {
+        e.stopPropagation();
+        const segment = sdk.DataModel.Segments.getById({ segmentId: sdk.Editing.getSelection().ids[0] });
+        moveNodeOut(segment, segment.toNodeId);
+    }
+
+    function moveNodeOut(segment, nodeId) {
         let isANode = true;
-        let curSeg = W.model.segments.getObjectById(sourceSegID);
-        if(nodeID === curSeg.attributes.toNodeID)
+        if (nodeId === segment.toNodeId) {
             isANode = false;
-        //Add geo point on the other segment
-        let node = W.model.nodes.getObjectById(nodeID);
-        let currNodePOS = structuredClone(node.attributes.geoJSONGeometry.coordinates);
-        let otherSeg; //other RA segment that we are adding a geo point to
-        let nodeSegs = [...W.model.nodes.getObjectById(nodeID).attributes.segIDs];
-        nodeSegs = _.without(nodeSegs, sourceSegID); //remove the source segment from the node Segs - we need to find the segment that is a part of the RA that is after our source seg
-        for(let i=0; i<nodeSegs.length; i++){
-            let s = W.model.segments.getObjectById(nodeSegs[i]);
-            if(s.attributes.junctionID){
-                otherSeg = s;
+        }
+
+        // Find the other segment on the roundabout connected to the node
+        const node = sdk.DataModel.Nodes.getById({ nodeId: nodeId });
+        let nodeSegmentIds = node.connectedSegmentIds.filter((segmentId) => segmentId !== segment.id);
+        const nodeSegments = getSegmentsFromIds(nodeSegmentIds);
+
+        let otherSegment;
+        for (const nodeSegment of nodeSegments) {
+            if (nodeSegment.junctionId) {
+                otherSegment = nodeSegment;
                 break;
             }
         }
 
-        if(otherSeg.attributes.geoJSONGeometry.coordinates.length > 2){
-            let newSegGeo = structuredClone(curSeg.attributes.geoJSONGeometry);
-            newSegGeo.coordinates.splice(isANode ? 1 : newSegGeo.coordinates.length - 1, 0, [currNodePOS[0], currNodePOS[1]]);
-            var multiaction = new MultiAction();
-            // multiaction.setModel(W.model);
-            multiaction.doSubAction(W.model, new UpdateSegmentGeometry(curSeg, curSeg.attributes.geoJSONGeometry, newSegGeo));
-            if((otherSeg.attributes.revDirection && !curSeg.attributes.revDirection) || (!otherSeg.attributes.revDirection && curSeg.attributes.revDirection))
+        // The other segment needs at least 3 coords (A node, one geonode and B node)
+        if (otherSegment.geometry.coordinates.length > 2) {
+            // Update the segment (add a geonode)
+            let newSegmentGeometry = structuredClone(segment.geometry);
+            newSegmentGeometry.coordinates.splice(isANode ? 1 : newSegmentGeometry.coordinates.length - 1, 0, node.geometry.coordinates);
+            sdk.DataModel.Segments.updateSegment({ segmentId: segment.id, geometry: newSegmentGeometry });
+
+            // The other segment will be the opposite of A or B
+            if ((otherSegment.isBtoA && !segment.isBtoA) || (!otherSegment.isBtoA && segment.isBtoA)) {
                 isANode = !isANode;
-
-            //note and remove first geo point, move junction node to this point
-            var newNodeGeometry = { type: 'Point', coordinates: structuredClone(otherSeg.attributes.geoJSONGeometry.coordinates[isANode ? otherSeg.attributes.geoJSONGeometry.coordinates.length - 2 : 1]) };
-            let newGeo = structuredClone(otherSeg.attributes.geoJSONGeometry);
-            newGeo.coordinates.splice(isANode ? -2 : 1, 1);
-            multiaction.doSubAction(W.model, new UpdateSegmentGeometry(otherSeg, otherSeg.attributes.geoJSONGeometry, newGeo));
-
-            //move the node
-            var connectedSegObjs = {};
-            var emptyObj = {};
-            for(var j=0; j < node.attributes.segIDs.length;j++){
-                var segid = node.attributes.segIDs[j];
-                connectedSegObjs[segid] = structuredClone(W.model.segments.getObjectById(segid).attributes.geoJSONGeometry);
             }
-            multiaction.doSubAction(W.model, new MoveNode(node, node.attributes.geoJSONGeometry, newNodeGeometry, connectedSegObjs, emptyObj));
-            W.model.actionManager.add(multiaction);
 
-            if(_settings.RoundaboutAngles)
-                DrawRoundaboutAngles();
+            // Update the other segment (remove a geonode)
+            let newOtherSegmentGeometry = structuredClone(otherSegment.geometry);
+            newOtherSegmentGeometry.coordinates.splice(isANode ? -2 : 1, 1);
+            sdk.DataModel.Segments.updateSegment({ segmentId: otherSegment.id, geometry: newOtherSegmentGeometry });
+
+            // Move the node
+            const newNodeGeometry = {
+                type: 'Point',
+                coordinates: structuredClone(otherSegment.geometry.coordinates[isANode ? otherSegment.geometry.coordinates.length - 2 : 1])
+            };
+            sdk.DataModel.Nodes.moveNode({ id: node.id, geometry: newNodeGeometry });
+
+            if (_settings.RoundaboutAngles) {
+                drawRoundaboutAngles();
+            }
         }
-    }
-
-    //Left
-    function RAShiftLeftBtnClick(e){
-        // this traps the click to prevent it falling through to the underlying area name element and potentially causing the map view to be relocated to that area...
-        e.stopPropagation();
-
-        //if(!pendingChanges){
-        var segObj = WazeWrap.getSelectedFeatures()[0];
-        var convertedCoords = WazeWrap.Geometry.ConvertTo4326(segObj.WW.getAttributes().geoJSONGeometry.coordinates[0][0], segObj.WW.getAttributes().geoJSONGeometry.coordinates[0][1]);
-        var gpsOffsetAmount = WazeWrap.Geometry.CalculateLongOffsetGPS(-$('#shiftAmount').val(), convertedCoords.lon, convertedCoords.lat);
-        ShiftSegmentsNodesLong(segObj, gpsOffsetAmount);
-        //}
-    }
-    //Right
-    function RAShiftRightBtnClick(e){
-        // this traps the click to prevent it falling through to the underlying area name element and potentially causing the map view to be relocated to that area...
-        e.stopPropagation();
-
-        //if(!pendingChanges){
-        var segObj = WazeWrap.getSelectedFeatures()[0];
-        var convertedCoords = WazeWrap.Geometry.ConvertTo4326(segObj.WW.getAttributes().geoJSONGeometry.coordinates[0][0], segObj.WW.getAttributes().geoJSONGeometry.coordinates[0][1]);
-        var gpsOffsetAmount = WazeWrap.Geometry.CalculateLongOffsetGPS($('#shiftAmount').val(), convertedCoords.lon, convertedCoords.lat);
-        ShiftSegmentsNodesLong(segObj, gpsOffsetAmount);
-        //}
-    }
-    //Up
-    function RAShiftUpBtnClick(e){
-        // this traps the click to prevent it falling through to the underlying area name element and potentially causing the map view to be relocated to that area...
-        e.stopPropagation();
-
-        //if(!pendingChanges){
-        var segObj = WazeWrap.getSelectedFeatures()[0];
-        var gpsOffsetAmount = WazeWrap.Geometry.CalculateLatOffsetGPS($('#shiftAmount').val(), WazeWrap.Geometry.ConvertTo4326(segObj.WW.getAttributes().geoJSONGeometry.coordinates[0][0], segObj.WW.getAttributes().geoJSONGeometry.coordinates[0][1]));
-        ShiftSegmentNodesLat(segObj, gpsOffsetAmount);
-        //}
-    }
-    //Down
-    function RAShiftDownBtnClick(e){
-        // this traps the click to prevent it falling through to the underlying area name element and potentially causing the map view to be relocated to that area...
-        e.stopPropagation();
-
-        //if(!pendingChanges){
-        var segObj = WazeWrap.getSelectedFeatures()[0];
-        var gpsOffsetAmount = WazeWrap.Geometry.CalculateLatOffsetGPS(-$('#shiftAmount').val(), WazeWrap.Geometry.ConvertTo4326(segObj.WW.getAttributes().geoJSONGeometry.coordinates[0][0], segObj.WW.getAttributes().geoJSONGeometry.coordinates[0][1]));
-        ShiftSegmentNodesLat(segObj, gpsOffsetAmount);
-        //}
     }
 
     //*************** Roundabout Angles **********************
-    function DrawRoundaboutAngles(){
-        //---------get or create layer
-        var layers = W.map.getLayersBy("uniqueName","__DrawRoundaboutAngles");
-
-        if(layers.length > 0)
-            drc_layer = layers[0];
-        else {
-            let drc_style = new OpenLayers.Style({
-                fillOpacity: 0.0,
-                strokeOpacity: 1.0,
-                fillColor: "#FF40C0",
-                strokeColor: "${strokeColor}",
-                strokeWidth: 10,
-                fontWeight: "bold",
-                pointRadius: 0,
-                label : "${labelText}",
-                fontFamily: "Tahoma, Courier New",
-                labelOutlineColor: "#FFFFFF",
-                labelOutlineWidth: 3,
-                fontColor: "${labelColor}",
-                fontSize: "10px"
-            });
-
-            drc_layer = new OpenLayers.Layer.Vector("Roundabout Angles", {
-                displayInLayerSwitcher: true,
-                uniqueName: "__DrawRoundaboutAngles",
-                styleMap: new OpenLayers.StyleMap(drc_style)
-            });
-
-            I18n.translations[I18n.currentLocale()].layers.name["__DrawRoundaboutAngles"] = "Roundabout Angles";
-            W.map.addLayer(drc_layer);
-
-            drc_layer.setVisibility(true);
-        }
-
-        localStorage.WMERAEnabled = drc_layer.visibility;
-
-        if (drc_layer.visibility == false) {
-            drc_layer.removeAllFeatures();
+    function drawRoundaboutAngles() {
+        if (sdk.Map.isLayerVisible({ layerName: '__DrawRoundaboutAngles' }) == false) {
+            sdk.Map.removeAllFeaturesFromLayer({ layerName: '__DrawRoundaboutAngles' });
             return;
         }
 
-        if (W.map.getZoom() < 1) {
-            drc_layer.removeAllFeatures();
+        if (sdk.Map.getZoomLevel() < 15) {
+            sdk.Map.removeAllFeaturesFromLayer({ layerName: '__DrawRoundaboutAngles' });
             return;
         }
 
         //---------collect all roundabouts first
-        var rsegments = {};
+        let segmentsByJunctionId = {};
+        for (const segment of sdk.DataModel.Segments.getAll()) {
+            let junctionId = segment.junctionId;
 
-        for (let iseg in W.model.segments.objects) {
-            let isegment = W.model.segments.getObjectById(iseg);
-            let iattributes = isegment.attributes;
-            let iline = isegment.getOLGeometry().id;
-
-            let irid = iattributes.junctionID;
-
-            if (iline !== null && irid != undefined) {
-                let rsegs = rsegments[irid];
-                if (rsegs == undefined)
-                    rsegments[irid] = rsegs = new Array();
-                rsegs.push(isegment);
+            if (junctionId) {
+                if (!segmentsByJunctionId[junctionId]) {
+                    segmentsByJunctionId[junctionId] = [];
+                }
+                segmentsByJunctionId[junctionId].push(segment);
             }
         }
 
-        var drc_features = [];
+        let layerFeatures = [];
 
         //-------for each roundabout do...
-        for (let irid in rsegments) {
-            let rsegs = rsegments[irid];
+        for (const junctionId in segmentsByJunctionId) {
+            const junctionSegments = segmentsByJunctionId[junctionId];
+            let nodes = junctionSegments.map((segment) => segment.fromNodeId); //get from nodes
+            nodes.push(...junctionSegments.map((segment) => segment.toNodeId));
+            nodes = [...new Set(nodes)]; //remove duplicates
+            const nodeCoordinates = nodes.map((nodeId) => sdk.DataModel.Nodes.getById({ nodeId }).geometry.coordinates);
 
-            let isegment = rsegs[0];
+            let radius = -1;
+            const nodeCount = nodeCoordinates.length;
 
-            let nodes = [];
-            let nodes_x = [];
-            let nodes_y = [];
-
-            nodes = rsegs.map(seg => seg.attributes.fromNodeID); //get from nodes
-            nodes = [...nodes, ...rsegs.map(seg => seg.attributes.toNodeID)]; //get to nodes add to from nodes
-            nodes = _.uniq(nodes); //remove duplicates
-
-            let node_objects = W.model.nodes.getByIds(nodes);
-            nodes_x = node_objects.map(n => n.getOLGeometry().x); //get all x locations
-            nodes_y = node_objects.map(n => n.getOLGeometry().y); //get all y locations
-
-            let sr_x = 0;
-            let sr_y = 0;
-            let radius = 0;
-            let numNodes = nodes_x.length;
-
-            if (numNodes >= 1) {
-                let ax = nodes_x[0];
-                let ay = nodes_y[0];
-                let junction = W.model.junctions.getObjectById(irid);
-                //var junction_coords = junction && junction.getOLGeometry() && junction.getOLGeometry().coordinates;
-
-//                if (junction_coords && junction_coords.length == 2) {
-                    //---------- get center point from junction model
-                    //let lonlat = new OpenLayers.LonLat(junction_coords[0], junction_coords[1]);
-                    //lonlat.transform(W.Config.map.projection.remote, W.Config.map.projection.local);
-                    //let pt = new OpenLayers.Geometry.Point(lonlat.lon, lonlat.lat);
-                    sr_x = junction.getOLGeometry().x;
-                    sr_y = junction.getOLGeometry().y;
-/**                }
-                else if (numNodes >= 3) {
-                    //-----------simple approximation of centre point calculated from three first points
-                    let bx = nodes_x[1];
-                    let by = nodes_y[1];
-                    let cx = nodes_x[2];
-                    let cy = nodes_y[2];
-
-                    let x1 = (bx + ax) * 0.5;
-                    let y11 = (by + ay) * 0.5;
-                    let dy1 = bx - ax;
-                    let dx1 = -(by - ay);
-                    let x2 = (cx + bx) * 0.5;
-                    let y2 = (cy + by) * 0.5;
-                    let dy2 = cx - bx;
-                    let dx2 = -(cy - by);
-                    sr_x = (y11 * dx1 * dx2 + x2 * dx1 * dy2 - x1 * dy1 * dx2 - y2 * dx1 * dx2)/ (dx1 * dy2 - dy1 * dx2);
-                    sr_y = (sr_x - x1) * dy1 / dx1 + y11;
-                }
-                else {
-                    //---------- simple bounds-based calculation of center point
-                    var rbounds = new OpenLayers.Bounds();
-                    rbounds.extend(isegment.getOLGeometry().bounds);
-
-                    var center = rbounds.getCenterPixel();
-                    sr_x = center.x;
-                    sr_y = center.y;
-                }**/
+            if (nodeCount >= 1) {
+                const junction = sdk.DataModel.Junctions.getById({ junctionId: parseInt(junctionId) });
+                let centerCoordinate = junction.geometry.coordinates;
 
                 let angles = [];
-                let rr = -1;
-                let r_ix;
-
-                for(let i=0; i<nodes_x.length; i++) {
-
-                    let dx = nodes_x[i] - sr_x;
-                    let dy = nodes_y[i] - sr_y;
-
-                    let rr2 = dx*dx + dy*dy;
-                    if (rr < rr2) {
-                        rr = rr2;
-                        r_ix = i;
+                for (const nodeCoordinate of nodeCoordinates) {
+                    let currentRadius = turf.distance(centerCoordinate, nodeCoordinate, { units: 'meters' });
+                    if (radius < currentRadius) {
+                        radius = currentRadius;
                     }
 
-                    let angle = Math.atan2(dy, dx);
-                    angle = (360.0 + (angle * 180.0 / Math.PI));
-                    if (angle < 0.0) angle += 360.0;
-                    if (angle > 360.0) angle -= 360.0;
+                    let angle = turf.bearing(centerCoordinate, nodeCoordinate);
                     angles.push(angle);
                 }
 
-                radius = Math.sqrt(rr);
-
                 //---------sorting angles for calulating angle difference between two segments
-                angles = angles.sort(function(a,b) { return a - b; });
-                angles.push( angles[0] + 360.0);
-                angles = angles.sort(function(a,b) { return a - b; });
+                angles = angles.sort(function (a, b) {
+                    return a - b;
+                });
+                angles.push(angles[0] + 360.0);
+                angles = angles.sort(function (a, b) {
+                    return a - b;
+                });
 
-                let drc_color = (numNodes <= 4) ? "#0040FF" : "#002080";
+                let strokeColor = nodeCount <= 4 ? COLOR.NORMAL_LINES : COLOR.NON_NORMAL_LINES;
 
-                let drc_point = new OpenLayers.Geometry.Point(sr_x, sr_y );
-                let drc_circle = new OpenLayers.Geometry.Polygon.createRegularPolygon( drc_point, radius, 10 * W.map.getZoom() );
-                let drc_feature = new OpenLayers.Feature.Vector(drc_circle, {labelText: "", labelColor: "#000000", strokeColor: drc_color, });
-                drc_features.push(drc_feature);
-
-
-                if (numNodes >= 2 && numNodes <= 4 && W.map.getZoom() >= 5) {
-                    for(let i=0; i<nodes_x.length; i++) {
-                        let ix = nodes_x[i];
-                        let iy = nodes_y[i];
-                        let startPt   = new OpenLayers.Geometry.Point( sr_x, sr_y );
-                        let endPt     = new OpenLayers.Geometry.Point( ix, iy );
-                        let line      = new OpenLayers.Geometry.LineString([startPt, endPt]);
-                        let style     = {strokeColor:drc_color, strokeWidth:2};
-                        let fea       = new OpenLayers.Feature.Vector(line, {}, style);
-                        drc_features.push(fea);
-                    }
-
-                    let angles_int = [];
-                    let angles_float = [];
-                    let angles_sum = 0;
-
-                    for(let i=0; i<angles.length - 1; i++) {
-
-                        let ang = angles[i+1] - angles[i+0];
-                        if (ang < 0) ang += 360.0;
-                        if (ang < 0) ang += 360.0;
-
-                        if (ang < 135.0)
-                            ang = ang - 90.0;
-                        else
-                            ang = ang - 180.0;
-
-                        angles_sum += parseInt(ang);
-
-                        angles_float.push( ang );
-                        angles_int.push( parseInt(ang) );
-                    }
-
-                    if (angles_sum > 45) angles_sum -= 90;
-                    if (angles_sum > 45) angles_sum -= 90;
-                    if (angles_sum > 45) angles_sum -= 90;
-                    if (angles_sum > 45) angles_sum -= 90;
-                    if (angles_sum < -45) angles_sum += 90;
-                    if (angles_sum < -45) angles_sum += 90;
-                    if (angles_sum < -45) angles_sum += 90;
-                    if (angles_sum < -45) angles_sum += 90;
-                    if (angles_sum != 0) {
-                        for(let i=0; i<angles_int.length; i++) {
-                            let a = angles_int[i];
-                            let af = angles_float[i] - angles_int[i];
-                            if ( (a < 10 || a > 20) && (af < -0.5 || af > 0.5)){
-                                angles_int[i] += -angles_sum;
-
-                                break;
-                            }
+                let circle = turf.circle(centerCoordinate, radius, { units: 'meters', steps: sdk.Map.getZoomLevel() * 5 });
+                let circleFeature = turf.polygon(
+                    circle.geometry.coordinates,
+                    {
+                        styleName: 'roundaboutCircleStyle',
+                        layerName: '__DrawRoundaboutAngles',
+                        style: {
+                            strokeColor
                         }
+                    },
+                    { id: `polygon_${centerCoordinate.toString()}_${radius}` }
+                );
+                layerFeatures.push(circleFeature);
+
+                if (nodeCount >= 2 && nodeCount <= 4) {
+                    //Normal roundabouts
+                    for (let nodeCoordinate of nodeCoordinates) {
+                        let lineFeature = turf.lineString(
+                            [centerCoordinate, nodeCoordinate],
+                            {
+                                styleName: 'roundaboutLineStyle',
+                                layerName: '__DrawRoundaboutAngles',
+                                style: { strokeColor }
+                            },
+                            { id: `line_${[centerCoordinate, nodeCoordinate].toString()}` }
+                        );
+                        layerFeatures.push(lineFeature);
                     }
 
-                    if (numNodes == 2) {
-                        angles_int[1] = -angles_int[0];
-                        angles_float[1] = -angles_float[0];
+                    let anglesFloat = [];
+                    let anglesSum = 0;
+                    for (let i = 0; i < angles.length - 1; i++) {
+                        // Find the angle between the two nodes
+                        let angle = angles[i + 1] - angles[i + 0];
+                        if (angle < 0) {
+                            angle += 360.0;
+                        }
+                        if (angle < 0) {
+                            angle += 360.0;
+                        }
+
+                        // Is the angle closer to 90 or 180, how many degrees off?
+                        if (angle < 135.0) {
+                            angle = angle - 90.0;
+                        } else {
+                            angle = angle - 180.0;
+                        }
+
+                        anglesSum += parseInt(angle);
+                        anglesFloat.push(angle);
                     }
 
-                    for(let i=0; i<angles.length - 1; i++) {
-                        let arad = (angles[i+0] + angles[i+1]) * 0.5 * Math.PI / 180.0;
-                        let ex = sr_x + Math.cos (arad) * radius * 0.5;
-                        let ey = sr_y + Math.sin (arad) * radius * 0.5;
+                    if (nodeCount == 2) {
+                        anglesFloat[1] = -anglesFloat[0];
+                    }
+
+                    for (let i = 0; i < angles.length - 1; i++) {
+                        let labelDistance = radius / 2;
+                        let angleMidpoint = (angles[i + 0] + angles[i + 1]) * 0.5;
+                        let labelPoint = turf.destination(centerCoordinate, labelDistance, angleMidpoint, { units: 'meters' });
 
                         //*** Angle Display Rounding ***
-                        let angint = Math.round(angles_float[i] * 100)/100;
+                        let angleRounded = Math.round(anglesFloat[i] * 100) / 100;
 
-                        let kolor = "#004000";
-                        if (angint <= -15 || angint >= 15) kolor = "#FF0000";
-                        else if (angint <= -13 || angint >= 13) kolor = "#FFC000";
+                        let labelColor = COLOR.NORMAL_ANGLES;
+                        if (angleRounded <= -15 || angleRounded >= 15) {
+                            labelColor = COLOR.NON_NORMAL_ANGLES;
+                        } else if (angleRounded <= -13 || angleRounded >= 13) {
+                            labelColor = COLOR.AVOID_ANGLES;
+                        }
 
-                        let pt = new OpenLayers.Geometry.Point(ex, ey);
-                        drc_features.push(new OpenLayers.Feature.Vector( pt, {labelText: (angint + "°"), labelColor: kolor } ));
-                        //drc_features.push(new OpenLayers.Feature.Vector( pt, {labelText: (+angles_float[i].toFixed(2) + "°"), labelColor: kolor } ));
+                        let angleLabelFeature = turf.point(
+                            labelPoint.geometry.coordinates,
+                            {
+                                styleName: 'roundaboutLabelStyle',
+                                layerName: '__DrawRoundaboutAngles',
+                                style: {
+                                    labelText: angleRounded + '°',
+                                    labelColor: labelColor
+                                }
+                            },
+                            { id: `label_${labelPoint.geometry.coordinates.toString()}` }
+                        );
+                        layerFeatures.push(angleLabelFeature);
+                    }
+                } else {
+                    // Non-normal roundabouts
+                    for (let nodeCoordinate of nodeCoordinates) {
+                        let lineFeature = turf.lineString(
+                            [centerCoordinate, nodeCoordinate],
+                            {
+                                styleName: 'roundaboutLineStyle',
+                                layerName: '__DrawRoundaboutAngles',
+                                style: { strokeColor }
+                            },
+                            { id: `line_${[centerCoordinate, nodeCoordinates].toString()}` }
+                        );
+                        layerFeatures.push(lineFeature);
                     }
                 }
-                else {
-                    for(let i=0; i < nodes_x.length; i++) {
-                        let ix = nodes_x[i];
-                        let iy = nodes_y[i];
-                        let startPt = new OpenLayers.Geometry.Point( sr_x, sr_y );
-                        let endPt = new OpenLayers.Geometry.Point( ix, iy );
-                        let line = new OpenLayers.Geometry.LineString([startPt, endPt]);
-                        let style = {strokeColor:drc_color, strokeWidth:2};
-                        let fea = new OpenLayers.Feature.Vector(line, {}, style);
-                        drc_features.push(fea);
-                    }
-                }
 
-                let p1 = new OpenLayers.Geometry.Point( nodes_x[r_ix], nodes_y[r_ix] );
-                let p2 = new OpenLayers.Geometry.Point( sr_x, sr_y );
-                let line = new OpenLayers.Geometry.LineString([p1, p2]);
-                let geo_radius = line.getGeodesicLength(W.map.getProjectionObject());
-
-                let diam = geo_radius * 2.0;
-                let center_pt = new OpenLayers.Geometry.Point(sr_x, sr_y);
-                drc_features.push(new OpenLayers.Feature.Vector( center_pt, {labelText: (diam.toFixed(0) + "m"), labelColor: "#000000" } ));
-
+                let centerLabelFeature = turf.point(
+                    centerCoordinate,
+                    {
+                        styleName: 'roundaboutLabelStyle',
+                        layerName: '__DrawRoundaboutAngles',
+                        style: {
+                            labelText: (radius * 2.0).toFixed(0) + 'm',
+                            labelColor: '#000000'
+                        }
+                    },
+                    { id: `centerLabel_${centerCoordinate.toString()}` }
+                );
+                layerFeatures.push(centerLabelFeature);
             }
-
         }
 
-        drc_layer.removeAllFeatures();
-        drc_layer.addFeatures(drc_features);
+        sdk.Map.removeAllFeaturesFromLayer({ layerName: '__DrawRoundaboutAngles' });
+        sdk.Map.addFeaturesToLayer({ layerName: '__DrawRoundaboutAngles', features: layerFeatures });
     }
 
     function injectCss() {
-        var css = [
-            '.btnMoveNode {width=25px; height=25px; background-color:#92C3D3; cursor:pointer; padding:5px; font-size:14px; border:thin outset black; border-style:solid; border-width: 1px;border-radius:50%; -moz-border-radius:50%; -webkit-border-radius:50%; box-shadow:inset 0px 0px 20px -14px rgba(0,0,0,1); -moz-box-shadow:inset 0px 0px 20px -14px rgba(0,0,0,1); -webkit-box-shadow: inset 0px 0px 20px -14px rgba(0,0,0,1);}',
-            '.btnRotate { width=45px; height=45px; background-color:#92C3D3; cursor:pointer; padding: 5px; font-size:14px; border:thin outset black; border-style:solid; border-width: 1px;border-radius: 50%;-moz-border-radius: 50%;-webkit-border-radius: 50%;box-shadow: inset 0px 0px 20px -14px rgba(0,0,0,1);-moz-box-shadow: inset 0px 0px 20px -14px rgba(0,0,0,1);-webkit-box-shadow: inset 0px 0px 20px -14px rgba(0,0,0,1);}'
-        ].join(' ');
+        const css = ['.btnMoveNode {width=25px; height=25px; background-color:#92C3D3; cursor:pointer; padding:5px; font-size:14px; border:thin outset black; border-style:solid; border-width: 1px;border-radius:50%; -moz-border-radius:50%; -webkit-border-radius:50%; box-shadow:inset 0px 0px 20px -14px rgba(0,0,0,1); -moz-box-shadow:inset 0px 0px 20px -14px rgba(0,0,0,1); -webkit-box-shadow: inset 0px 0px 20px -14px rgba(0,0,0,1);}', '.btnRotate { width=45px; height=45px; background-color:#92C3D3; cursor:pointer; padding: 5px; font-size:14px; border:thin outset black; border-style:solid; border-width: 1px;border-radius: 50%;-moz-border-radius: 50%;-webkit-border-radius: 50%;box-shadow: inset 0px 0px 20px -14px rgba(0,0,0,1);-moz-box-shadow: inset 0px 0px 20px -14px rgba(0,0,0,1);-webkit-box-shadow: inset 0px 0px 20px -14px rgba(0,0,0,1);}'].join(' ');
         $('<style type="text/css">' + css + '</style>').appendTo('head');
     }
 
-})();
+    function applyRoundaboutCircleStyle(properties) {
+        return properties.styleName === 'roundaboutCircleStyle' && properties.layerName === '__DrawRoundaboutAngles';
+    }
 
+    function applyRoundaboutLineStyle(properties) {
+        return properties.styleName === 'roundaboutLineStyle' && properties.layerName === '__DrawRoundaboutAngles';
+    }
+
+    function applyRoundaboutLabelStyle(properties) {
+        return properties.styleName === 'roundaboutLabelStyle' && properties.layerName === '__DrawRoundaboutAngles';
+    }
+
+    const styleConfig = {
+        styleContext: {
+            labelText: (context) => {
+                return context?.feature?.properties?.style?.labelText;
+            },
+            strokeColor: (context) => {
+                return context?.feature?.properties?.style?.strokeColor;
+            },
+            strokeWidth: (context) => {
+                return context?.feature?.properties?.style?.strokeWidth;
+            },
+            labelColor: (context) => {
+                return context?.feature?.properties?.style?.labelColor;
+            }
+        },
+        styleRules: [
+            {
+                predicate: applyRoundaboutCircleStyle,
+                style: {
+                    fillOpacity: 0.0,
+                    strokeWidth: 10,
+                    strokeColor: '${strokeColor}',
+                    pointRadius: 0
+                }
+            },
+            {
+                predicate: applyRoundaboutLineStyle,
+                style: {
+                    strokeWidth: 2,
+                    strokeColor: '${strokeColor}',
+                    pointRadius: 0
+                }
+            },
+            {
+                predicate: applyRoundaboutLabelStyle,
+                style: {
+                    label: '${labelText}',
+                    labelOutlineColor: '#FFFFFF',
+                    labelOutlineWidth: 3,
+                    fontFamily: 'Tahoma, Courier New',
+                    fontWeight: 'bold',
+                    fontColor: '${labelColor}',
+                    fontSize: '10px'
+                }
+            }
+        ]
+    };
+})();
