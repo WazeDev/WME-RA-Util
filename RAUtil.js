@@ -1,13 +1,13 @@
 // ==UserScript==
 // @name         WME RA Util
 // @namespace    https://greasyfork.org/users/30701-justins83-waze
-// @version      2025.12.30.01
+// @version      2026.05.03.01
 // @description  Providing basic utility for RA adjustment without the need to delete & recreate
 // @include      https://www.waze.com/editor*
 // @include      https://www.waze.com/*/editor*
 // @include      https://beta.waze.com/*
 // @exclude      https://www.waze.com/user/editor*
-// @require      https://greasyfork.org/scripts/24851-wazewrap/code/WazeWrap.js
+// @require      https://cdn.jsdelivr.net/gh/WazeDev/WazeWrap@refs/heads/master/WazeWrap.js
 // @require      https://cdn.jsdelivr.net/npm/@turf/turf@7.2.0/turf.min.js
 // @connect      greasyfork.org
 // @author       JustinS83
@@ -50,7 +50,7 @@
     let roundaboutPopup = null;
     let _settings;
 
-    const updateMessage = 'Conversion to WME SDK. Now uses turf for calculations and geometry.  Thank you to lacmac for undertaking this conversion, and the others that have reviewed and added their insight.';
+    const updateMessage = 'Updating WazeWrap reference.';
 
     function waitUntil(callback, interval = 200, timeout = 60000) {
         return new Promise((resolve, reject) => {
