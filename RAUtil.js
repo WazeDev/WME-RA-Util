@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         WME RA Util
 // @namespace    https://greasyfork.org/users/30701-justins83-waze
-// @version      2026.05.03.01
+// @version      2026.06.11.01
 // @description  Providing basic utility for RA adjustment without the need to delete & recreate
 // @include      https://www.waze.com/editor*
 // @include      https://www.waze.com/*/editor*
@@ -30,7 +30,7 @@
 (function () {
     const SCRIPT_VERSION = GM_info.script.version.toString();
     const SCRIPT_NAME = GM_info.script.name;
-    const DOWNLOAD_URL = GM_info.scriptUpdateURL;
+    const DOWNLOAD_URL = GM_info.script.downloadURL;
 
     const DIRECTION = {
         NORTH: 0,
@@ -284,7 +284,7 @@
             drawRoundaboutAngles();
         }
 
-        WazeWrap.Interface.ShowScriptUpdate('WME RA Util', GM_info.script.version, updateMessage, 'https://greasyfork.org/en/scripts/23616-wme-ra-util', 'https://www.waze.com/forum/viewtopic.php?f=819&t=211079');
+        WazeWrap.Interface.ShowScriptUpdate('WME RA Util', GM_info.script.version, updateMessage, 'https://greasyfork.org/en/scripts/23616-wme-ra-util', 'https://www.waze.com/discuss/t/script-wme-ra-util/79835');
     }
 
     function saveSettingsToStorage() {
