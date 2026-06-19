@@ -1,13 +1,13 @@
 // ==UserScript==
 // @name         WME RA Util
 // @namespace    https://greasyfork.org/users/30701-justins83-waze
-// @version      2026.06.11.01
+// @version      2026.06.19.01
 // @description  Providing basic utility for RA adjustment without the need to delete & recreate
 // @include      https://www.waze.com/editor*
 // @include      https://www.waze.com/*/editor*
 // @include      https://beta.waze.com/*
 // @exclude      https://www.waze.com/user/editor*
-// @require      https://cdn.jsdelivr.net/gh/WazeDev/WazeWrap@refs/heads/master/WazeWrap.js
+// @require      https://greasyfork.org/scripts/24851-wazewrap/code/WazeWrap.js
 // @require      https://cdn.jsdelivr.net/npm/@turf/turf@7.2.0/turf.min.js
 // @connect      greasyfork.org
 // @author       JustinS83
